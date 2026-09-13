@@ -1,0 +1,38 @@
+:root {
+    --betwin-corner-left: 34px;
+    --betwin-corner-top: 28px;
+    --betwin-corner-size: 46px;
+}
+
+.betwin-word {
+    display: flex;
+    height: 1em;
+    color: #f8fafc;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: .05em;
+}
+
+.betwin-word__letter {
+    display: inline-flex;
+    height: 1em;
+    align-items: center;
+    flex: none;
+    white-space: pre;
+}
+
+.betwin-word__letter--win {
+    color: transparent;
+    background-image: linear-gradient(90deg, #cdff51 0%, #b6ff00 55%, #6d9900 100%);
+    background-repeat: no-repeat;
+    background-clip: text;
+    -webkit-background-clip: text;
+    filter: drop-shadow(0 0 7px rgba(182, 255, 0, .22));
+}
+
+@media (max-width: 640px) {
+    :root {
+        --betwin-corner-left: 20px;
+        --betwin-corner-size: 38px;
+    }
+}

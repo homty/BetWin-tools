@@ -4,9 +4,9 @@ export default defineConfig({
     base: '/static/frontend/',
     define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     build: {
-        outDir: '../static/frontend',
+        outDir: '../backend/static/frontend',
         emptyOutDir: true,
-        lib: { entry: 'src/main.tsx', formats: ['es'], fileName: () => 'welcome.js', cssFileName: 'welcome' },
+        lib: { entry: 'src/app/main.tsx', formats: ['es'], fileName: () => 'welcome.js', cssFileName: 'welcome' },
         rollupOptions: { output: { assetFileNames: '[name][extname]' } },
     },
 });

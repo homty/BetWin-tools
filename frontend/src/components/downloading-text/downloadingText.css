@@ -1,0 +1,40 @@
+.downloading-text {
+    display: inline-flex;
+}
+
+.downloading-text__line {
+    position: relative;
+    display: inline-block;
+    white-space: pre;
+}
+
+.downloading-text__cursor {
+    display: inline-block;
+    position: absolute;
+    left: calc(100% + 5px);
+    top: 50%;
+    transform: translateY(-50%);
+    color: #b6ff00;
+    font: italic 500 1em/21px 'Montserrat Variable', Montserrat, sans-serif;
+    opacity: 0;
+    animation: downloading-cursor-blink .7s steps(1) infinite;
+}
+
+.downloading-text[data-phase="cursor"] .downloading-text__cursor,
+.downloading-text[data-phase="typing"] .downloading-text__cursor {
+    opacity: 1;
+}
+
+.downloading-text__cursor.is-settled {
+    visibility: hidden;
+}
+
+@keyframes downloading-cursor-blink {
+    50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .downloading-text__cursor {
+        display: none;
+    }
+}

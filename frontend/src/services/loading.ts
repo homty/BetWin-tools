@@ -10,14 +10,21 @@ export const subscribe = (listener: Listener) => {
     return () => { listeners.delete(listener); };
 };
 
+export const setLoading = (value: boolean) => {
+    manual = value;
+    notify();
+};
+
+export async function track<T>(promise: Promise<T>): Promise<T> {
+    tasks++;
+    notify();
+    try { return await promise; }
+    finally { tasks--; notify(); }
+}
+
 export const loading = {
-    setLoading(value: boolean) { manual = value; notify(); },
-    async track<T>(promise: Promise<T>): Promise<T> {
-        tasks++;
-        notify();
-        try { return await promise; }
-        finally { tasks--; notify(); }
-    },
+    setLoading,
+    track,
 };
 declare global { interface Window { betwinIntro: typeof loading; } }
 window.betwinIntro = loading;

@@ -1,0 +1,25 @@
+@font-face {
+    font-family: 'Montserrat Variable';
+    src: url('@fontsource-variable/montserrat/files/montserrat-latin-wght-normal.woff2') format('woff2-variations');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Montserrat Variable';
+    src: url('@fontsource-variable/montserrat/files/montserrat-latin-wght-italic.woff2') format('woff2-variations');
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+}
+:root { font-family: 'Montserrat Variable', Montserrat, sans-serif; color: #f8fafc; background: #121212; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.welcome { min-height: 100vh; min-height: 100svh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; overflow: hidden; }
+.lockup { width: 368px; height: 170px; display: flex; flex-direction: column; align-items: center; gap: 0; }
+.word-box { margin: 0; width: 368px; height: 115px; flex: none; display: flex; justify-content: center; align-items: center; font-size: 80px; font-weight: 700; line-height: 21px; letter-spacing: 0px; }
+.tools-box { width: 175px; height: 55px; flex: none; display: flex; align-items: center; font-family: 'Montserrat Variable', Montserrat, sans-serif; font-size: 45px; font-weight: 400; font-style: italic; line-height: 21px; letter-spacing: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 399px) { .lockup { transform: scale(.8); } }
+@media (max-width: 319px) { .lockup { transform: scale(.65); } }
+ 
