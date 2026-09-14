@@ -3,7 +3,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
-from .clone_service import clone_repository
+from .clone_service import clone_repository, existing_repository_matches, repository_destination
 from .models import CodeSubmission, Product, SetupJob
 from .pipeline_client import ModelPipelineClient, PipelineError
 
@@ -83,6 +83,43 @@ def setup(request):
     job.local_path = str(path)
     job.save(update_fields=['status', 'local_path'])
     return JsonResponse({'id': job.id, 'status': job.status, 'localPath': job.local_path}, status=201)
+
+
+@require_GET
+def setup_status(request):
+    try:
+        product_id = int(request.GET.get('productId', ''))
+    except ValueError:
+        return JsonResponse({'error': 'A valid productId is required.'}, status=400)
+
+    try:
+        product = Product.objects.get(id=product_id)
+    except Product.DoesNotExist:
+        return JsonResponse({'error': 'Product not found.'}, status=404)
+
+    job = product.setup_jobs.filter(status='ready').first()
+    if job:
+        return JsonResponse({
+            'configured': True,
+            'status': job.status,
+            'localPath': job.local_path,
+        })
+
+    destination = repository_destination(product.name)
+    if product.github_url and existing_repository_matches(destination, product.github_url):
+        job = SetupJob.objects.create(
+            product=product,
+            repository_url=product.github_url,
+            local_path=str(destination),
+            status='ready',
+        )
+        return JsonResponse({
+            'configured': True,
+            'status': job.status,
+            'localPath': job.local_path,
+        })
+
+    return JsonResponse({'configured': False, 'status': 'not_configured'})
 
 
 @require_GET

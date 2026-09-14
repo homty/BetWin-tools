@@ -20,15 +20,44 @@ def validate_repository_url(repository_url):
     and parsed.path.count("/") >= 2
 )
 
+
+def normalize_repository_url(repository_url):
+    return repository_url.strip().rstrip('/').removesuffix('.git').lower()
+
+
+def existing_repository_matches(destination, repository_url):
+    if not (destination / '.git').is_dir():
+        return False
+
+    result = subprocess.run(
+        ['git', '-C', str(destination), 'remote', 'get-url', 'origin'],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    return (
+        result.returncode == 0
+        and normalize_repository_url(result.stdout) == normalize_repository_url(repository_url)
+    )
+
+
+def repository_destination(product_name):
+    return WORKSPACE_DIR / product_name.lower()
+
 def clone_repository(repository_url, product_name):
     if not validate_repository_url(repository_url):
         raise ValueError("Only valid GitHub HTTPS URLs are allowed")
 
-    destination = WORKSPACE_DIR / product_name.lower()
+    destination = repository_destination(product_name)
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
     if destination.exists():
-        raise FileExistsError("This repository has already been cloned")
+        if existing_repository_matches(destination, repository_url):
+            return destination
+        raise FileExistsError(
+            "The product directory already exists but contains a different repository."
+        )
 
     result = subprocess.run(
         ["git", "clone", "--depth", "1", repository_url, str(destination)],
@@ -41,4 +70,3 @@ def clone_repository(repository_url, product_name):
         raise RuntimeError(result.stderr.strip())
 
     return destination
-
