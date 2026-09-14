@@ -3,7 +3,8 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import CodeSubmission, Product
+from .clone_service import clone_repository
+from .models import CodeSubmission, Product, SetupJob
 from .pipeline_client import ModelPipelineClient, PipelineError
 
 
@@ -41,6 +42,47 @@ def products(request):
         for product in Product.objects.all()
     ]
     return JsonResponse({'products': data})
+
+
+@require_POST
+def setup(request):
+    try:
+        payload = json.loads(request.body or b'{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'Request body must be a JSON object.'}, status=400)
+
+    repository_url = payload.get('repositoryUrl')
+    product_id = payload.get('productId')
+    if not isinstance(repository_url, str) or not repository_url.strip():
+        return JsonResponse({'error': 'repositoryUrl is required.'}, status=400)
+    if not isinstance(product_id, int):
+        return JsonResponse({'error': 'productId is required.'}, status=400)
+
+    try:
+        product = Product.objects.get(id=product_id)
+    except Product.DoesNotExist:
+        return JsonResponse({'error': 'Product not found.'}, status=404)
+
+    job = SetupJob.objects.create(
+        product=product,
+        repository_url=repository_url.strip(),
+    )
+
+    try:
+        path = clone_repository(job.repository_url, product.name)
+    except (ValueError, FileExistsError, RuntimeError) as error:
+        job.status = 'failed'
+        job.error_message = str(error)
+        job.save(update_fields=['status', 'error_message'])
+        return JsonResponse({'id': job.id, 'status': job.status, 'error': job.error_message}, status=400)
+
+    job.status = 'ready'
+    job.local_path = str(path)
+    job.save(update_fields=['status', 'local_path'])
+    return JsonResponse({'id': job.id, 'status': job.status, 'localPath': job.local_path}, status=201)
 
 
 @require_GET
