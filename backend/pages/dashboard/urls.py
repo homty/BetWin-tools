@@ -7,4 +7,5 @@ app_name = 'dashboard'
 urlpatterns = [
     path('', views.landing, name='landing'),
     path('dashboard/', views.home, name='home'),
+    path('anislot/', views.anislot, name='anislot'),
 ]

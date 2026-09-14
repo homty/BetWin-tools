@@ -7,3 +7,7 @@ def landing(request):
 
 def home(request):
     return render(request, 'dashboard/home.html')
+
+
+def anislot(request):
+    return render(request, 'dashboard/anislot.html')
