@@ -2,8 +2,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Welcome from '../pages/welcome/Welcome';
 import Onboard from '../pages/onboarding/Onboard';
+import AniSlot from '../pages/anislot/AniSlot';
 import '../pages/welcome/welcome.css';
 import '../pages/onboarding/onboard.css';
+import '../pages/anislot/anislot.css';
 
 const root = document.getElementById('welcome-root');
 if (root) {
@@ -30,3 +32,9 @@ if (onboardRoot) {
     );
 }
 
+const anislotRoot = document.getElementById('anislot-root');
+if (anislotRoot) {
+    createRoot(anislotRoot).render(
+        <StrictMode><AniSlot backUrl={anislotRoot.dataset.backUrl || '/'} /></StrictMode>,
+    );
+}

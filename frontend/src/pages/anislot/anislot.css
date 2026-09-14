@@ -1,0 +1,20 @@
+.anislot-page { min-height: 100vh; min-height: 100svh; display: grid; place-items: center; position: relative; padding: 120px 24px 48px; color: #f8fafc; background: radial-gradient(circle at 50% 54%, rgba(155, 220, 29, .2), transparent 48%), #121212; }
+.anislot-brand { position: absolute; top: var(--betwin-corner-top); left: var(--betwin-corner-left); color: #f8fafc; text-decoration: none; line-height: 1; }
+.anislot-brand__name { font-size: var(--betwin-corner-size); }
+.anislot-card { position: relative; isolation: isolate; box-sizing: border-box; width: min(580px, 100%); padding: 63px 66px 26px; display: flex; flex-direction: column; align-items: center; border-radius: 10px; background: transparent; text-align: center; }
+.anislot-card::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: #1f1f1f; -webkit-mask-image: radial-gradient(circle 42px at 50% 0, transparent 41px, #000 42px); mask-image: radial-gradient(circle 42px at 50% 0, transparent 41px, #000 42px); filter: drop-shadow(0 30px 50px rgba(0, 0, 0, .24)); }
+.anislot-card__icon { position: absolute; top: -42px; left: 50%; width: 84px; height: 84px; display: grid; place-items: center; transform: translateX(-50%); border-radius: 50%; background: transparent; }
+.anislot-card__icon img { display: block; width: 64px; height: 64px; filter: drop-shadow(0 0 7px rgba(182, 255, 0, .25)); }
+.anislot-card h1 { margin: 0; font-size: 30px; }
+.anislot-card__description { width: 452px; height: 42px; margin: 10px 0 0; font-family: 'Montserrat Variable', Montserrat, sans-serif; font-size: 25px; line-height: 21px; font-weight: 400; letter-spacing: 1%; }
+.anislot-repository { width: 100%; min-height: 82px; padding: 12px 14px 10px; box-sizing: border-box; border-radius: 8px; background: #393939; text-align: left; }
+.anislot-repository strong { display: block; color: #f8fafc; font-size: 16px; line-height: 18px; font-weight: 700; }
+.anislot-repository span { display: block; margin-top: 3px; color: #c7c7c7; font-size: 15px; line-height: 18px; }
+.anislot-repository input { box-sizing: border-box; width: 100%; margin-top: 8px; padding: 0; border: 0; outline: 0; color: #a3a3a3; background: transparent; font: inherit; font-size: 15px; line-height: 21px; }
+.anislot-repository input.is-valid { color: #b6ff00; }
+.anislot-repository input::placeholder { color: #a3a3a3; }
+.anislot-card__button { width: 256px; height: 44px; margin-top: 28px; border: 0; border-radius: 11px; color: #181818; background: #b6ff00; font: inherit; font-weight: 600; cursor: pointer; }
+.anislot-card__button:disabled { background: #a3a3a3; cursor: not-allowed; }
+.anislot-card__back { margin-top: 10px; color: #B6FF00; font-size: 14px; }
+.anislot-error { color: #ff9b9b; font-size: 14px; }
+@media (max-width: 640px) { .anislot-page { padding: 150px 16px 32px; place-items: start center; } .anislot-card { padding: 58px 20px 24px; } .anislot-card__button { width: 100%; } }

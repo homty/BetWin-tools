@@ -1,24 +1,15 @@
-import { FormEvent, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import BetWinWord from '../../components/brand/BetWinWord';
+import { ApiProduct, fetchProducts } from '../../services/products';
 
 gsap.registerPlugin(useGSAP);
-
-type ProductId = 'anislot' | 'prediction-market';
 
 type OnboardProps = {
     anislotUrl: string;
     predictionMarketUrl: string;
     backUrl: string;
-};
-
-type Product = {
-    id: ProductId;
-    name: string;
-    description: string;
-    url: string;
-    icon: string;
 };
 
 function Brand() {
@@ -31,12 +22,18 @@ function Brand() {
 
 export default function Onboard({ anislotUrl, predictionMarketUrl, backUrl }: OnboardProps) {
     const container = useRef<HTMLElement>(null);
-    const [selected, setSelected] = useState<ProductId | null>(null);
+    const [selected, setSelected] = useState<number | null>(null);
+    const [products, setProducts] = useState<ApiProduct[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const arrivedFromWelcome = useRef(sessionStorage.getItem('betwin-arrived-from-welcome') === 'true');
-    const products: Product[] = [
-        { id: 'anislot', name: 'AniSlot', description: 'Slots in anime-themed slots', url: anislotUrl, icon: '/static/frontend/icons/joystick-05.svg' },
-        { id: 'prediction-market', name: 'Prediction Market', description: 'Predict real events, or make your own market', url: predictionMarketUrl, icon: '/static/frontend/icons/chart-candle.svg' },
-    ];
+
+    useEffect(() => {
+        fetchProducts()
+            .then(setProducts)
+            .catch((requestError: Error) => setError(requestError.message))
+            .finally(() => setLoading(false));
+    }, []);
 
     useGSAP(() => {
         if (arrivedFromWelcome.current) {
@@ -60,7 +57,9 @@ export default function Onboard({ anislotUrl, predictionMarketUrl, backUrl }: On
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const product = products.find(item => item.id === selected);
-        if (product) window.location.assign(product.url);
+        if (!product) return;
+        const destination = product.name === 'AniSlot' ? anislotUrl : predictionMarketUrl;
+        window.location.assign(destination);
     };
 
     return (
@@ -74,6 +73,8 @@ export default function Onboard({ anislotUrl, predictionMarketUrl, backUrl }: On
                     <h1>Product Selection</h1>
                     <p>Before we get started <br/> we just need to select your product</p>
                 </header>
+                {loading && <p role="status">Loading products...</p>}
+                {error && <p role="alert">{error}</p>}
                 <div className="product-options" role="radiogroup" aria-label="Products">
                     {products.map(product => (
                         <button
@@ -86,18 +87,16 @@ export default function Onboard({ anislotUrl, predictionMarketUrl, backUrl }: On
                             onClick={() => setSelected(product.id)}
                         >
                             <span className="product-option__icon">
-                                <img src={product.icon} alt="" aria-hidden="true" />
+                                <img src={product.name === 'AniSlot' ? '/static/frontend/icons/joystick-05.svg' : '/static/frontend/icons/chart-candle.svg'} alt="" aria-hidden="true" />
                             </span>
                             <span className="product-option__copy">
                                 <strong>{product.name}</strong>
                                 <span>{product.description}</span>
                             </span>
-                            <span className="product-option__check" aria-hidden="true">✓</span>
                         </button>
                     ))}
                 </div>
-                <button className="product-panel__continue" type="submit" disabled={!selected}>Continue</button>
-                <a className="product-panel__back" href={backUrl}>Go back</a>
+                <button className="product-panel__continue" type="submit" disabled={loading || Boolean(error) || selected === null}>Continue</button>
             </form>
         </main>
     );
