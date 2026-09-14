@@ -1,0 +1,14 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BetWin Tools</title>
+    <link rel="stylesheet" href="{% static 'frontend/welcome.css' %}">
+    <script type="module" src="{% static 'frontend/welcome.js' %}" defer></script>
+  </head>
+  <body>
+    <div id="welcome-root" data-dashboard-url="{% url 'dashboard:home' %}"></div>
+  </body>
+</html>
