@@ -749,7 +749,7 @@
 .workspace-page--dashboard .workspace-svg-placeholder__body { left: 11px; bottom: 8px; width: 30px; }
 .workspace-page--dashboard .configuration-row__copy small { display: block; }
 
-@media (max-width: 760px) {
+@media (max-width: 1050px) {
     .workspace-page--dashboard {
         width: 100%;
         min-height: 100vh;
