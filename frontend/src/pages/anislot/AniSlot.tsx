@@ -201,7 +201,16 @@ function Workspace({ backUrl }: { backUrl: string }) {
                 }));
                 if (!['completed', 'failed', 'canceled'].includes(updated.status)) timer = window.setTimeout(poll, 1200);
             } catch (requestError) {
-                if (!cancelled) setGenerationError(requestError instanceof Error ? requestError.message : 'Could not check generation status.');
+                if (!cancelled) {
+                    setGenerationError('');
+                    setSnapshot(previous => ({
+                        ...previous,
+                        status: 'Reconnecting',
+                        currentNode: 'Waiting for InvokeAI to respond',
+                        estimatedTime: '—',
+                    }));
+                    timer = window.setTimeout(poll, 2500);
+                }
             }
         };
         void poll();
