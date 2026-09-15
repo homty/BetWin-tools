@@ -8,6 +8,7 @@ from .clone_service import clone_repository, existing_repository_matches, reposi
 from .invoke_client import InvokeClient, InvokeError
 from .models import CodeSubmission, Product
 from .pipeline_client import ModelPipelineClient, PipelineError
+from .result_store import AniSlotResultStore
 from .workflow_builder import AniSlotWorkflowBuilder, WorkflowBuildError
 
 
@@ -118,12 +119,24 @@ def anislot_job(request, item_id):
         image_names = InvokeClient.image_names_from_results(results)
         if image_names:
             image_name = image_names[-1]
+            content, _ = InvokeClient().download_image(image_name)
+            AniSlotResultStore().save(item_id, image_name, content)
             response['imageName'] = image_name
-            response['imageUrl'] = reverse('api_gateway:anislot_image', args=[image_name])
+            response['imageUrl'] = reverse('api_gateway:anislot_result', args=[item_id])
         else:
             response['error'] = 'InvokeAI completed the job but returned no image output.'
 
     return JsonResponse(response)
+
+
+@require_GET
+def anislot_result(request, item_id):
+    """Serve the durable local copy of a completed AniSlot generation."""
+    try:
+        content, content_type = AniSlotResultStore().read(item_id)
+    except (FileNotFoundError, ValueError):
+        return JsonResponse({'error': 'Saved AniSlot result was not found.'}, status=404)
+    return HttpResponse(content, content_type=content_type)
 
 
 @require_GET
