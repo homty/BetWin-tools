@@ -102,7 +102,7 @@ function WorkspaceNav({
 function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; dashboardUrl: string; workflowUrl: string }) {
     const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(workspacePlaceholder);
     const [job, setJob] = useState<AniSlotJob | null>(null);
-    const [dashboardScale, setDashboardScale] = useState(() => window.innerWidth / 1760);
+    const [dashboardScale, setDashboardScale] = useState(() => window.innerWidth <= 760 ? 1 : window.innerWidth / 1760);
     const [modelRole, setModelRole] = useState<'finisher' | 'creative'>(() => localStorage.getItem('anislot.modelRole') === 'creative' ? 'creative' : 'finisher');
     const [outputAmount, setOutputAmount] = useState(() => Number(localStorage.getItem('anislot.outputAmount') || '3'));
     const [angleExplorer, setAngleExplorer] = useState(() => localStorage.getItem('anislot.angleExplorer') !== 'false');
@@ -119,7 +119,7 @@ function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
     useEffect(() => { localStorage.setItem('anislot.characterPose', String(characterPose)); }, [characterPose]);
 
     useEffect(() => {
-        const updateScale = () => setDashboardScale(window.innerWidth / 1760);
+        const updateScale = () => setDashboardScale(window.innerWidth <= 760 ? 1 : window.innerWidth / 1760);
         updateScale();
         window.addEventListener('resize', updateScale);
         return () => window.removeEventListener('resize', updateScale);
