@@ -115,10 +115,13 @@ function SetupCard({
                         <strong>GitHub Link</strong>
                         <input
                             className={repositoryUrl.trim() ? 'is-valid' : ''}
-                            type="url"
+                            type="text"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
                             value={repositoryUrl}
                             onChange={event => onRepositoryChange(event.target.value)}
-                            placeholder="https://github.com/owner/repository.git"
+                            placeholder="git@github.com:owner/repository.git"
                             required
                         />
                     </label>
