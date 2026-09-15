@@ -222,13 +222,14 @@
 .workspace-shell--dashboard {
     grid-template-columns: minmax(640px, 1fr) minmax(390px, 505px);
     grid-template-areas:
-        "status metrics"
+        "metrics metrics"
+        "status configuration"
         "output configuration";
     align-items: start;
 }
 
 .dashboard-status { grid-area: status; }
-.dashboard-metrics { grid-area: metrics; }
+.dashboard-metrics { grid-area: metrics; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .dashboard-output { grid-area: output; }
 .dashboard-configuration { grid-area: configuration; }
 
@@ -549,11 +550,12 @@
     .workspace-shell--dashboard {
         grid-template-columns: 1fr;
         grid-template-areas:
-            "status"
             "metrics"
+            "status"
             "output"
             "configuration";
     }
+    .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .workspace-sidebar { display: grid; grid-template-columns: minmax(300px, .85fr) minmax(420px, 1.15fr); align-items: start; }
 }
 
