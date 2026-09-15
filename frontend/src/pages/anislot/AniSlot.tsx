@@ -285,6 +285,16 @@ function Workspace({ backUrl }: { backUrl: string }) {
                         <span>B</span><span>W</span>
                     </span>
                 </a>
+                <nav className="workspace-nav" aria-label="Main navigation">
+                    <a className="workspace-nav__link" href={backUrl}>
+                        <span className="workspace-nav__icon" aria-hidden="true">▦</span>
+                        <span>Dashboard</span>
+                    </a>
+                    <a className="workspace-nav__link is-active" href="/anislot/core/" aria-current="page">
+                        <span className="workspace-nav__icon" aria-hidden="true">✦</span>
+                        <span>Workflow<small>Design Helper</small></span>
+                    </a>
+                </nav>
                 <span className="workspace-rail__glow" aria-hidden="true" />
             </aside>
 
