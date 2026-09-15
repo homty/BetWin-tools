@@ -35,7 +35,7 @@ def pipeline(request):
 
 @require_POST
 def anislot_generate(request):
-    """Upload one source image and queue the AniSlot InvokeAI workflow."""
+    """Upload the source image and optional slot concept, then queue InvokeAI."""
     image = request.FILES.get('image')
     if image is None:
         return JsonResponse({'error': 'An image file is required.'}, status=400)
@@ -43,10 +43,13 @@ def anislot_generate(request):
     try:
         seed = _optional_integer(request.POST.get('seed'), 'seed')
         width = _optional_integer(request.POST.get('width'), 'width')
+        runs = _optional_integer(request.POST.get('runs'), 'runs') or 1
         if seed is not None and seed < 0:
             raise ValueError('seed must be a non-negative integer.')
         if width is not None and width < 64:
             raise ValueError('width must be an integer of at least 64.')
+        if not 1 <= runs <= 4:
+            raise ValueError('runs must be between 1 and 4.')
 
         client = InvokeClient()
         uploaded_image = client.upload_image(
@@ -58,15 +61,30 @@ def anislot_generate(request):
         if not isinstance(image_name, str) or not image_name:
             raise InvokeError('InvokeAI uploaded the image but did not return image_name.')
 
+        slot_concept = request.FILES.get('slotConceptImage')
+        slot_concept_image_name = None
+        if slot_concept is not None:
+            uploaded_concept = client.upload_image(
+                slot_concept.read(),
+                slot_concept.name,
+                slot_concept.content_type,
+            )
+            slot_concept_image_name = uploaded_concept.get('image_name')
+            if not isinstance(slot_concept_image_name, str) or not slot_concept_image_name:
+                raise InvokeError('InvokeAI uploaded the slot concept but did not return image_name.')
+
         graph = AniSlotWorkflowBuilder().build(
             image_name=image_name,
+            slot_concept_image_name=slot_concept_image_name,
+            slot_concept_prompt=_optional_text(request.POST.get('slotConceptPrompt')),
             positive_prompt=_optional_text(request.POST.get('positivePrompt')),
             negative_prompt=_optional_text(request.POST.get('negativePrompt')),
             seed=seed,
             width=width,
         )
-        queued = client.enqueue_graph(graph)
-        item_id = queued['item_ids'][0]
+        queued = client.enqueue_graph(graph, runs=runs)
+        item_ids = queued['item_ids']
+        item_id = item_ids[0]
     except (InvokeError, WorkflowBuildError) as error:
         return JsonResponse({'error': str(error)}, status=error.status_code)
     except ValueError as error:
@@ -75,6 +93,7 @@ def anislot_generate(request):
     return JsonResponse({
         'status': 'queued',
         'itemId': item_id,
+        'itemIds': item_ids,
     }, status=202)
 
 

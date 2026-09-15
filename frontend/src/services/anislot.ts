@@ -26,25 +26,36 @@ async function readResponse(response: Response): Promise<Record<string, unknown>
 
 export async function generateAniSlot(values: {
     image: File;
+    slotConceptImage?: File;
+    slotConceptPrompt?: string;
     positivePrompt?: string;
+    negativePrompt?: string;
     seed?: string;
     width?: string;
-}): Promise<{ itemId: string }> {
+    runs?: number;
+}): Promise<{ itemId: string; itemIds: string[] }> {
     const body = new FormData();
     body.append('image', values.image);
+    if (values.slotConceptImage) body.append('slotConceptImage', values.slotConceptImage);
+    if (values.slotConceptPrompt?.trim()) body.append('slotConceptPrompt', values.slotConceptPrompt.trim());
     if (values.positivePrompt?.trim()) body.append('positivePrompt', values.positivePrompt.trim());
+    if (values.negativePrompt?.trim()) body.append('negativePrompt', values.negativePrompt.trim());
     if (values.seed?.trim()) body.append('seed', values.seed.trim());
     if (values.width?.trim()) body.append('width', values.width.trim());
+    if (values.runs && values.runs > 1) body.append('runs', String(values.runs));
 
     const data = await readResponse(await fetch('/api/anislot/generate/', {
         method: 'POST',
         headers: {'X-CSRFToken': getCookie('csrftoken')},
         body,
     }));
-    if (typeof data.itemId !== 'string') {
+    if (typeof data.itemId !== 'string' && typeof data.itemId !== 'number') {
         throw new Error('AniSlot did not return a queue item ID.');
     }
-    return {itemId: data.itemId};
+    const itemIds = Array.isArray(data.itemIds)
+        ? data.itemIds.filter((id): id is string | number => typeof id === 'string' || typeof id === 'number').map(String)
+        : [data.itemId].map(String);
+    return {itemId: String(data.itemId), itemIds};
 }
 
 export async function getAniSlotJob(itemId: string): Promise<AniSlotJob> {

@@ -19,6 +19,10 @@ class AniSlotWorkflowBuilder:
     POSITIVE_PROMPT_NODE = '130589cd-5fd0-4261-a13c-f9dc0ca7dd66'
     NEGATIVE_PROMPT_NODE = '95eda4be-f9da-4591-9de9-f3647f80ba81'
     SEED_NODE = 'e37fd4f1-5c44-428e-99a3-6ed57ec56f89'
+    REFERENCE_IMAGES_NODE = 'ca935918-b2b9-4ea5-9f37-5e8d04ae7a55'
+    POSITIVE_TEXT_ENCODER_NODE = 'd29b3fc5-8451-4ba2-8e36-c085958ebd77'
+    SLOT_CONCEPT_IMAGE_NODE = '3c4bf8ee-bfb5-4cff-bdb4-9fbcde8a6a7d'
+    SLOT_CONCEPT_COLLECTION_NODE = '7db37a44-2398-42ae-ae3c-c8f691a47767'
 
     def __init__(self, workflow_path: str | Path | None = None):
         repository_root = Path(__file__).resolve().parents[2]
@@ -31,6 +35,8 @@ class AniSlotWorkflowBuilder:
         self,
         *,
         image_name: str,
+        slot_concept_image_name: str | None = None,
+        slot_concept_prompt: str | None = None,
         positive_prompt: str | None = None,
         negative_prompt: str | None = None,
         seed: int | None = None,
@@ -39,6 +45,8 @@ class AniSlotWorkflowBuilder:
         """Return a queue-ready graph with the supplied job values."""
         if not image_name:
             raise ValueError('image_name is required.')
+        if slot_concept_image_name is not None and not slot_concept_image_name:
+            raise ValueError('slot_concept_image_name cannot be empty.')
         if seed is not None and (not isinstance(seed, int) or seed < 0):
             raise ValueError('seed must be a non-negative integer.')
         if width is not None and (not isinstance(width, int) or width < 64):
@@ -50,6 +58,13 @@ class AniSlotWorkflowBuilder:
         self._set_input(nodes, self.SOURCE_IMAGE_NODE, 'image', {'image_name': image_name})
         if positive_prompt is not None:
             self._set_input(nodes, self.POSITIVE_PROMPT_NODE, 'value', positive_prompt)
+        if slot_concept_image_name is not None or slot_concept_prompt is not None:
+            prompt_input = nodes[self.POSITIVE_PROMPT_NODE]['data']['inputs']['value']
+            prompt_input['value'] = self._with_slot_concept_guidance(
+                prompt_input['value'],
+                has_image=slot_concept_image_name is not None,
+                concept_prompt=slot_concept_prompt,
+            )
         if negative_prompt is not None:
             self._set_input(nodes, self.NEGATIVE_PROMPT_NODE, 'value', negative_prompt)
         if seed is not None:
@@ -61,7 +76,73 @@ class AniSlotWorkflowBuilder:
             # An explicit BetWin width intentionally replaces that automatic value.
             disconnected_inputs.add((self.WIDTH_NODE, 'value'))
 
-        return self._to_graph(workflow, disconnected_inputs)
+        graph = self._to_graph(workflow, disconnected_inputs)
+        if slot_concept_image_name is not None:
+            self._add_slot_concept_reference(graph, slot_concept_image_name)
+        return graph
+
+    @staticmethod
+    def _with_slot_concept_guidance(
+        positive_prompt: str,
+        *,
+        has_image: bool,
+        concept_prompt: str | None,
+    ) -> str:
+        guidance = []
+        if has_image:
+            guidance.append(
+                'Reference image 1 is the source symbol: preserve its identity, silhouette, '
+                'proportions, and recognizable details. Reference image 2 is the slot concept: '
+                'use it only for the theme, visual language, palette, lighting, materials, and mood; '
+                'do not copy its layout or unrelated objects.'
+            )
+        if concept_prompt is not None:
+            guidance.append(f'Slot concept direction: {concept_prompt}')
+        return ' '.join(part for part in [positive_prompt.strip(), *guidance] if part)
+
+    def _add_slot_concept_reference(self, graph: dict, image_name: str) -> None:
+        """Append an optional concept image after the source-symbol reference."""
+        graph['nodes'][self.SLOT_CONCEPT_IMAGE_NODE] = {
+            'id': self.SLOT_CONCEPT_IMAGE_NODE,
+            'type': 'image',
+            'is_intermediate': True,
+            'use_cache': True,
+            'image': {'image_name': image_name},
+        }
+        graph['nodes'][self.SLOT_CONCEPT_COLLECTION_NODE] = {
+            'id': self.SLOT_CONCEPT_COLLECTION_NODE,
+            'type': 'collect',
+            'is_intermediate': True,
+            'use_cache': False,
+        }
+
+        graph['edges'] = [
+            edge for edge in graph['edges']
+            if not (
+                edge['source']['node_id'] == self.REFERENCE_IMAGES_NODE
+                and edge['destination'] == {
+                    'node_id': self.POSITIVE_TEXT_ENCODER_NODE,
+                    'field': 'reference_images',
+                }
+            )
+        ]
+        graph['edges'].extend([
+            {
+                'source': {'node_id': self.SLOT_CONCEPT_IMAGE_NODE, 'field': 'image'},
+                'destination': {'node_id': self.SLOT_CONCEPT_COLLECTION_NODE, 'field': 'item'},
+            },
+            {
+                'source': {'node_id': self.REFERENCE_IMAGES_NODE, 'field': 'collection'},
+                'destination': {'node_id': self.SLOT_CONCEPT_COLLECTION_NODE, 'field': 'collection'},
+            },
+            {
+                'source': {'node_id': self.SLOT_CONCEPT_COLLECTION_NODE, 'field': 'collection'},
+                'destination': {
+                    'node_id': self.POSITIVE_TEXT_ENCODER_NODE,
+                    'field': 'reference_images',
+                },
+            },
+        ])
 
     def _load_workflow(self) -> dict:
         try:
