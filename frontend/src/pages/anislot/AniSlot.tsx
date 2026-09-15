@@ -152,28 +152,24 @@ function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
                 <span className="workspace-rail__glow" aria-hidden="true" />
             </aside>
             <div className="workspace-shell workspace-shell--dashboard">
-                <section className="workspace-main" aria-label="Generation dashboard">
-                    <div className="workflow-summary">
-                        <article className="summary-card"><span>Status</span><strong className="summary-card__status"><i />{snapshot.status}</strong></article>
-                        <article className="summary-card"><span>Current node</span><strong>{snapshot.currentNode}</strong></article>
-                        <article className="summary-card"><span>Estimated time</span><strong>{snapshot.estimatedTime}</strong></article>
-                    </div>
-                    <section className="dashboard-output">
-                        <header className="panel-heading"><span>Final Output</span></header>
-                        {job?.imageUrl ? <img src={job.imageUrl} alt="Final generated slot concept" /> : <span><strong>Final Generation will appear here</strong><small>Start a workflow to track its progress and view the saved result.</small></span>}
-                        {job?.error && <p className="workspace-error" role="alert">{job.error}</p>}
-                    </section>
+                <section className="workflow-summary dashboard-status" aria-label="Workflow status">
+                    <article className="summary-card"><span>Status</span><strong className="summary-card__status"><i />{snapshot.status}</strong></article>
+                    <article className="summary-card"><span>Current node</span><strong>{snapshot.currentNode}</strong></article>
+                    <article className="summary-card"><span>Estimated time</span><strong>{snapshot.estimatedTime}</strong></article>
                 </section>
-                <aside className="workspace-sidebar" aria-label="Performance metrics and model configuration">
-                    <section className="metrics-grid" aria-label="System resource usage">{snapshot.resources.map(metric => <MetricDial key={metric.key} metric={metric} />)}</section>
-                    <section className="configuration-panel">
+                <section className="metrics-grid dashboard-metrics" aria-label="System resource usage">{snapshot.resources.map(metric => <MetricDial key={metric.key} metric={metric} />)}</section>
+                <section className="dashboard-output">
+                    <header className="panel-heading"><span>Final Output</span></header>
+                    {job?.imageUrl ? <img src={job.imageUrl} alt="Final generated slot concept" /> : <span><strong>Final Generation will appear here</strong><small>Start a workflow to track its progress and view the saved result.</small></span>}
+                    {job?.error && <p className="workspace-error" role="alert">{job.error}</p>}
+                </section>
+                <aside className="configuration-panel dashboard-configuration" aria-label="Model configuration">
                         <h1>Model configuration</h1>
                         <label className="configuration-row"><SvgPlaceholder name="model-role" /><span className="configuration-row__copy"><strong>Model role</strong><small>Select the model&apos;s behavior type</small></span><select value={modelRole} onChange={event => setModelRole(event.target.value as 'finisher' | 'creative')}><option value="finisher">Finisher</option><option value="creative">Creative</option></select></label>
                         <label className="configuration-row"><SvgPlaceholder name="image-scale-divider" /><span className="configuration-row__copy"><strong>Image scale divider</strong><small>Select image downscaling ratio</small></span><select defaultValue="2"><option value="1">1x</option><option value="2">2x</option><option value="4">4x</option></select></label>
                         <label className="configuration-row"><SvgPlaceholder name="angle-explorer" /><span className="configuration-row__copy"><strong>Angle explorer</strong><small>Generate different angles</small></span><input className="toggle-input" type="checkbox" checked={angleExplorer} onChange={event => setAngleExplorer(event.target.checked)} /><span className="toggle" aria-hidden="true"><i /></span></label>
                         <label className="configuration-row"><SvgPlaceholder name="character-pose" /><span className="configuration-row__copy"><strong>Character pose</strong><small>Generate different poses</small></span><input className="toggle-input" type="checkbox" checked={characterPose} onChange={event => setCharacterPose(event.target.checked)} /><span className="toggle" aria-hidden="true"><i /></span></label>
                         <label className="configuration-row"><SvgPlaceholder name="output-amount" /><span className="configuration-row__copy"><strong>Amount of output</strong><small>Select number of generated images</small></span><select value={outputAmount} onChange={event => setOutputAmount(Number(event.target.value))}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
-                    </section>
                 </aside>
             </div>
         </main>
