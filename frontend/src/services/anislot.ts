@@ -61,3 +61,10 @@ export async function generateAniSlot(values: {
 export async function getAniSlotJob(itemId: string): Promise<AniSlotJob> {
     return await readResponse(await fetch(`/api/anislot/jobs/${encodeURIComponent(itemId)}/`)) as AniSlotJob;
 }
+
+export async function cancelAniSlotJob(itemId: string): Promise<AniSlotJob> {
+    return await readResponse(await fetch(`/api/anislot/jobs/${encodeURIComponent(itemId)}/cancel/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')},
+    })) as AniSlotJob;
+}

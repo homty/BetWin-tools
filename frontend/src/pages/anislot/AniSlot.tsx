@@ -9,7 +9,7 @@ import {
     useState,
 } from 'react';
 import BetWinWord from '../../components/brand/BetWinWord';
-import { AniSlotJob, generateAniSlot, getAniSlotJob } from '../../services/anislot';
+import { AniSlotJob, cancelAniSlotJob, generateAniSlot, getAniSlotJob } from '../../services/anislot';
 import { ApiProduct, fetchProducts, fetchSetupStatus, startSetup } from '../../services/products';
 
 type ResourceMetric = {
@@ -285,10 +285,17 @@ function Workspace({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
     const [slotConceptFile, setSlotConceptFile] = useState<File | null>(null);
     const [slotConceptName, setSlotConceptName] = useState('');
     const [isDragging, setIsDragging] = useState(false);
+    const [additionalPrompt, setAdditionalPrompt] = useState('');
     const [positivePrompt, setPositivePrompt] = useState('');
     const [negativePrompt, setNegativePrompt] = useState('');
+    const [isQueueing, setIsQueueing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [activeItemIds, setActiveItemIds] = useState<string[]>([]);
+    const [generationJob, setGenerationJob] = useState<AniSlotJob | null>(null);
     const [generationError, setGenerationError] = useState('');
+    const [workflowScale, setWorkflowScale] = useState(() => window.innerWidth <= 1050 ? 1 : window.innerWidth / 1760);
+
+    const isGenerateReady = Boolean(referenceFile && positivePrompt.trim() && negativePrompt.trim());
 
     useEffect(() => () => {
         if (referenceImage.startsWith('blob:')) URL.revokeObjectURL(referenceImage);
@@ -297,6 +304,43 @@ function Workspace({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
     useEffect(() => () => {
         if (slotConceptImage.startsWith('blob:')) URL.revokeObjectURL(slotConceptImage);
     }, [slotConceptImage]);
+
+    useEffect(() => {
+        const updateScale = () => setWorkflowScale(window.innerWidth <= 1050 ? 1 : window.innerWidth / 1760);
+        updateScale();
+        window.addEventListener('resize', updateScale);
+        return () => window.removeEventListener('resize', updateScale);
+    }, []);
+
+    useEffect(() => {
+        if (!isGenerating || !generationJob?.itemId) return;
+        let disposed = false;
+        let timer: number | undefined;
+
+        const poll = async () => {
+            try {
+                const updated = await getAniSlotJob(generationJob.itemId);
+                if (disposed) return;
+                setGenerationJob(updated);
+                if (['completed', 'failed', 'canceled'].includes(updated.status)) {
+                    setIsGenerating(false);
+                    if (updated.error) setGenerationError(updated.error);
+                    return;
+                }
+                timer = window.setTimeout(poll, 1200);
+            } catch (error) {
+                if (disposed) return;
+                setGenerationError(error instanceof Error ? error.message : 'Could not read generation status.');
+                timer = window.setTimeout(poll, 2500);
+            }
+        };
+
+        void poll();
+        return () => {
+            disposed = true;
+            if (timer !== undefined) window.clearTimeout(timer);
+        };
+    }, [generationJob?.itemId, isGenerating]);
 
     const useImage = (target: 'reference' | 'concept', file?: File) => {
         if (!file?.type.startsWith('image/')) return;
@@ -313,8 +357,8 @@ function Workspace({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
     };
 
     const handleGenerate = async () => {
-        if (!referenceFile || isGenerating) {
-            setGenerationError('Add a reference image before generating.');
+        if (!referenceFile || !positivePrompt.trim() || !negativePrompt.trim() || isGenerating || isQueueing) {
+            setGenerationError('Add a reference image and complete both prompt fields before generating.');
             return;
         }
         const modelRole = localStorage.getItem('anislot.modelRole') === 'creative' ? 'creative' : 'finisher';
@@ -323,22 +367,38 @@ function Workspace({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
             ? 'Preserve the object identity, silhouette, perspective, and key color palette. Improve only finish and production quality.'
             : 'Keep the object identity, perspective, and key color family. Explore alternative details, materials, and decorative ideas.';
         setGenerationError('');
-        setIsGenerating(true);
+        setIsQueueing(true);
         try {
             const queued = await generateAniSlot({
                 image: referenceFile,
                 slotConceptImage: slotConceptFile || undefined,
+                slotConceptPrompt: additionalPrompt,
                 positivePrompt: [modeInstruction, positivePrompt].filter(Boolean).join('\n\n'),
                 negativePrompt,
                 runs: modelRole === 'creative' ? outputAmount : 1,
             });
             localStorage.setItem('anislot.activeJobId', queued.itemId);
-            window.location.assign(dashboardUrl);
+            setActiveItemIds(queued.itemIds);
+            setGenerationJob({ itemId: queued.itemId, status: 'queued' });
+            setIsGenerating(true);
         } catch (requestError) {
             const message = requestError instanceof Error ? requestError.message : 'Generation could not start.';
             setGenerationError(message);
         } finally {
+            setIsQueueing(false);
+        }
+    };
+
+    const handleStop = async () => {
+        if (!isGenerating || activeItemIds.length === 0) return;
+        setGenerationError('');
+        try {
+            await Promise.all(activeItemIds.map(cancelAniSlotJob));
+            setGenerationJob(previous => previous ? { ...previous, status: 'canceled' } : previous);
             setIsGenerating(false);
+            localStorage.removeItem('anislot.activeJobId');
+        } catch (requestError) {
+            setGenerationError(requestError instanceof Error ? requestError.message : 'Generation could not be stopped.');
         }
     };
 
@@ -355,7 +415,7 @@ function Workspace({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
     const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
         event.preventDefault();
         setIsDragging(false);
-        useImage('reference', event.dataTransfer.files?.[0]);
+        useImage(activePanel, event.dataTransfer.files?.[0]);
     };
 
     const handlePaste = (event: ClipboardEvent<HTMLElement>) => {
@@ -368,8 +428,16 @@ function Workspace({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
         }
     };
 
+    const shownImage = activePanel === 'reference' ? referenceImage : slotConceptImage;
+    const shownName = activePanel === 'reference' ? referenceName : slotConceptName;
+    const generationState = isGenerating ? 'running' : isGenerateReady ? 'ready' : 'idle';
+
     return (
-        <main className="workspace-page" onPaste={handlePaste}>
+        <main
+            className="workspace-page workspace-page--workflow-page"
+            style={{ '--workflow-scale': workflowScale } as CSSProperties}
+            onPaste={handlePaste}
+        >
             <aside className="workspace-rail">
                 <a className="workspace-brand" href={backUrl} aria-label="Back to products">
                     <span className="workspace-brand__name" aria-hidden="true">
@@ -381,69 +449,93 @@ function Workspace({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
             </aside>
 
             <div className="workspace-shell workspace-shell--workflow">
-                <section className="workspace-main" aria-label="Generation workspace">
-                    <section className="reference-panel">
-                        <header className="panel-heading">
-                            <div className="panel-heading__tabs" role="tablist" aria-label="Artwork view">
-                                <button className={activePanel === 'reference' ? 'is-active' : ''} type="button" role="tab" aria-selected={activePanel === 'reference'} onClick={() => setActivePanel('reference')}>Reference image</button>
-                                <button className={activePanel === 'concept' ? 'is-active' : ''} type="button" role="tab" aria-selected={activePanel === 'concept'} onClick={() => setActivePanel('concept')}>Slot Concept</button>
-                            </div>
+                <div className="workflow-design-grid" aria-label="Generation workspace">
+                    <section className="workflow-source-card">
+                        <header className="workflow-source-card__header">
+                            <button
+                                className="workflow-source-switch"
+                                type="button"
+                                onClick={() => setActivePanel(activePanel === 'reference' ? 'concept' : 'reference')}
+                                aria-label={activePanel === 'reference' ? 'Show Concept image' : 'Back to Reference image'}
+                            >
+                                {activePanel === 'concept' && <i aria-hidden="true">&lt;</i>}
+                                <span>{activePanel === 'reference' ? 'Reference image' : 'Concept image'}</span>
+                                {activePanel === 'reference' && <i aria-hidden="true">&gt;</i>}
+                            </button>
+                            <button
+                                className="workflow-generate-control"
+                                data-state={generationState}
+                                type="button"
+                                disabled={isQueueing || (!isGenerating && !isGenerateReady)}
+                                onClick={isGenerating ? handleStop : handleGenerate}
+                            >
+                                {isQueueing ? 'Starting…' : isGenerating ? 'Stop generation' : 'Generate'}
+                            </button>
                         </header>
-                        {activePanel === 'reference' ? (
-                            <div className="reference-panel__content">
-                                <div className="reference-input-wrap">
-                                    <input ref={imageInput} className="visually-hidden" type="file" accept="image/*" onChange={handleFileInput} tabIndex={-1} />
-                                    <button className="reference-input" data-dragging={isDragging} type="button" onClick={() => imageInput.current?.click()} onDragEnter={() => setIsDragging(true)} onDragLeave={() => setIsDragging(false)} onDragOver={event => event.preventDefault()} onDrop={handleDrop} aria-label="Choose, drop, or paste a thematic reference image">
-                                        {referenceImage ? <img src={referenceImage} alt={referenceName || 'Selected thematic reference'} /> : <><ReferenceArtwork /><span className="reference-input__title">Add thematic image</span><span className="reference-input__hint">Click, drop, or paste</span></>}
+
+                        <div className="workflow-source-card__content">
+                            <div className="workflow-image-wrap">
+                                <input ref={imageInput} className="visually-hidden" type="file" accept="image/*" onChange={handleFileInput} tabIndex={-1} />
+                                <input ref={slotConceptInput} className="visually-hidden" type="file" accept="image/*" onChange={handleSlotConceptInput} tabIndex={-1} />
+                                <button
+                                    className="workflow-image-input"
+                                    data-dragging={isDragging}
+                                    type="button"
+                                    onClick={() => (activePanel === 'reference' ? imageInput : slotConceptInput).current?.click()}
+                                    onDragEnter={() => setIsDragging(true)}
+                                    onDragLeave={() => setIsDragging(false)}
+                                    onDragOver={event => event.preventDefault()}
+                                    onDrop={handleDrop}
+                                    aria-label={`Choose, drop, or paste a ${activePanel} image`}
+                                >
+                                    {shownImage
+                                        ? <img src={shownImage} alt={shownName || `Selected ${activePanel} image`} />
+                                        : <img className="workflow-image-input__icon" src="/static/frontend/icons/img-load-box.svg" alt="" />}
+                                </button>
+                                {shownImage && (
+                                    <button className="reference-input__replace" type="button" onClick={() => (activePanel === 'reference' ? imageInput : slotConceptInput).current?.click()}>
+                                        Replace image
                                     </button>
-                                    {referenceImage && <button className="reference-input__replace" type="button" onClick={() => imageInput.current?.click()}>Replace image</button>}
-                                </div>
+                                )}
                             </div>
-                        ) : activePanel === 'concept' ? (
-                            <div className="reference-panel__content">
-                                <div className="reference-input-wrap">
-                                    <input ref={slotConceptInput} className="visually-hidden" type="file" accept="image/*" onChange={handleSlotConceptInput} tabIndex={-1} />
-                                    <button className="reference-input" type="button" onClick={() => slotConceptInput.current?.click()} aria-label="Choose or paste a slot concept visual">
-                                        {slotConceptImage ? <img src={slotConceptImage} alt={slotConceptName || 'Selected slot concept visual'} /> : <><ReferenceArtwork /><span className="reference-input__title">Add slot concept visual</span><span className="reference-input__hint">Click or paste an image</span></>}
-                                    </button>
-                                    {slotConceptImage && <button className="reference-input__replace" type="button" onClick={() => slotConceptInput.current?.click()}>Replace image</button>}
-                                </div>
-                                <div className="slot-concept-copy">
-                                    <strong>Slot Concept</strong>
-                                    <p>Add an image showing how the slot should look: its composition, rendering, color treatment, interface language, or atmosphere.</p>
-                                </div>
-                            </div>
-                        ) : null}
+
+                            <label className="workflow-prompt-field workflow-prompt-field--additional">
+                                <span>Additional prompt</span>
+                                <textarea
+                                    data-backend-input="additionalPrompt"
+                                    value={additionalPrompt}
+                                    onChange={event => setAdditionalPrompt(event.target.value)}
+                                />
+                            </label>
+                        </div>
+                        {generationError && <p className="workspace-error" role="alert">{generationError}</p>}
                     </section>
 
-                    <div className="prompt-grid">
-                        <label className="prompt-field prompt-field--large">
-                            <span>Positive prompt</span>
-                            <textarea
-                                data-backend-input="positivePrompt"
-                                placeholder="Describe what should appear in the result..."
-                                value={positivePrompt}
-                                onChange={event => setPositivePrompt(event.target.value)}
-                            />
-                        </label>
-                        <label className="prompt-field prompt-field--large">
-                            <span>Negative prompt</span>
-                            <textarea
-                                data-backend-input="negativePrompt"
-                                placeholder="Describe what the result should avoid..."
-                                value={negativePrompt}
-                                onChange={event => setNegativePrompt(event.target.value)}
-                            />
-                        </label>
-                    </div>
-                    <div className="workflow-actions">
-                        <button className="generate-button" type="button" onClick={handleGenerate} disabled={isGenerating || !referenceFile}>
-                            {isGenerating ? 'Queueing…' : 'Generate and open Dashboard'}
-                            <span aria-hidden="true">↗</span>
-                        </button>
-                        {generationError && <p className="workspace-error" role="alert">{generationError}</p>}
-                    </div>
-                </section>
+                    <label className="workflow-prompt-field workflow-prompt-field--positive">
+                        <span>Positive prompt</span>
+                        <textarea
+                            data-backend-input="positivePrompt"
+                            value={positivePrompt}
+                            onChange={event => setPositivePrompt(event.target.value)}
+                        />
+                    </label>
+
+                    <section className="workflow-gallery">
+                        <h2>Gallery</h2>
+                        {generationJob?.imageUrl
+                            ? <img src={generationJob.imageUrl} alt="Generated slot artwork" />
+                            : <span>{isGenerating ? 'Generation is running…' : 'Generated images will appear here'}</span>}
+                    </section>
+
+                    <label className="workflow-prompt-field workflow-prompt-field--negative">
+                        <span>Negative prompt</span>
+                        <textarea
+                            data-backend-input="negativePrompt"
+                            value={negativePrompt}
+                            onChange={event => setNegativePrompt(event.target.value)}
+                        />
+                    </label>
+                </div>
             </div>
         </main>
     );
