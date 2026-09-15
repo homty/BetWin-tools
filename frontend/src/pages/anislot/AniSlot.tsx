@@ -76,6 +76,110 @@ function MetricDial({ metric }: { metric: ResourceMetric }) {
     );
 }
 
+function WorkspaceNav({
+    dashboardUrl,
+    workflowUrl,
+    active,
+}: {
+    dashboardUrl: string;
+    workflowUrl: string;
+    active: 'dashboard' | 'workflow';
+}) {
+    return (
+        <nav className="workspace-nav" aria-label="Main navigation">
+            <a className={`workspace-nav__link${active === 'dashboard' ? ' is-active' : ''}`} href={dashboardUrl} aria-current={active === 'dashboard' ? 'page' : undefined}>
+                <span className="workspace-nav__icon" aria-hidden="true">▦</span>
+                <span>Dashboard</span>
+            </a>
+            <a className={`workspace-nav__link${active === 'workflow' ? ' is-active' : ''}`} href={workflowUrl} aria-current={active === 'workflow' ? 'page' : undefined}>
+                <span className="workspace-nav__icon" aria-hidden="true">✦</span>
+                <span>Workflow<small>Design Helper</small></span>
+            </a>
+        </nav>
+    );
+}
+
+function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; dashboardUrl: string; workflowUrl: string }) {
+    const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(workspacePlaceholder);
+    const [job, setJob] = useState<AniSlotJob | null>(null);
+    const [modelRole, setModelRole] = useState<'finisher' | 'creative'>(() => localStorage.getItem('anislot.modelRole') === 'creative' ? 'creative' : 'finisher');
+    const [outputAmount, setOutputAmount] = useState(() => Number(localStorage.getItem('anislot.outputAmount') || '3'));
+    const [angleExplorer, setAngleExplorer] = useState(() => localStorage.getItem('anislot.angleExplorer') !== 'false');
+    const [characterPose, setCharacterPose] = useState(() => localStorage.getItem('anislot.characterPose') !== 'false');
+
+    useEffect(() => {
+        const itemId = localStorage.getItem('anislot.activeJobId');
+        if (itemId) setJob({ itemId, status: 'queued' });
+    }, []);
+
+    useEffect(() => { localStorage.setItem('anislot.modelRole', modelRole); }, [modelRole]);
+    useEffect(() => { localStorage.setItem('anislot.outputAmount', String(outputAmount)); }, [outputAmount]);
+    useEffect(() => { localStorage.setItem('anislot.angleExplorer', String(angleExplorer)); }, [angleExplorer]);
+    useEffect(() => { localStorage.setItem('anislot.characterPose', String(characterPose)); }, [characterPose]);
+
+    useEffect(() => {
+        if (!job || ['completed', 'failed', 'canceled'].includes(job.status)) return;
+        let cancelled = false;
+        let timer: number | undefined;
+        const poll = async () => {
+            try {
+                const updated = await getAniSlotJob(job.itemId);
+                if (cancelled) return;
+                setJob(updated);
+                setSnapshot(previous => ({
+                    ...previous,
+                    status: updated.status.replace('_', ' '),
+                    currentNode: updated.status === 'in_progress' ? 'InvokeAI workflow is running' : 'Waiting for InvokeAI',
+                    estimatedTime: updated.status === 'in_progress' ? 'Processing' : '—',
+                }));
+                if (!['completed', 'failed', 'canceled'].includes(updated.status)) timer = window.setTimeout(poll, 1200);
+            } catch {
+                if (!cancelled) {
+                    setSnapshot(previous => ({ ...previous, status: 'Reconnecting', currentNode: 'Waiting for InvokeAI to respond', estimatedTime: '—' }));
+                    timer = window.setTimeout(poll, 2500);
+                }
+            }
+        };
+        void poll();
+        return () => { cancelled = true; if (timer !== undefined) window.clearTimeout(timer); };
+    }, [job?.itemId]);
+
+    return (
+        <main className="workspace-page">
+            <aside className="workspace-rail">
+                <a className="workspace-brand" href={backUrl} aria-label="Back to products"><span className="workspace-brand__name" aria-hidden="true"><span>B</span><span>W</span></span></a>
+                <WorkspaceNav dashboardUrl={dashboardUrl} workflowUrl={workflowUrl} active="dashboard" />
+                <span className="workspace-rail__glow" aria-hidden="true" />
+            </aside>
+            <div className="workspace-shell workspace-shell--dashboard">
+                <section className="workspace-main" aria-label="Generation dashboard">
+                    <div className="workflow-summary">
+                        <article className="summary-card"><span>Status</span><strong className="summary-card__status"><i />{snapshot.status}</strong></article>
+                        <article className="summary-card"><span>Current node</span><strong>{snapshot.currentNode}</strong></article>
+                        <article className="summary-card"><span>Estimated time</span><strong>{snapshot.estimatedTime}</strong></article>
+                    </div>
+                    <section className="dashboard-output">
+                        <header className="panel-heading"><span>Final Output</span></header>
+                        {job?.imageUrl ? <img src={job.imageUrl} alt="Final generated slot concept" /> : <span><strong>Final Generation will appear here</strong><small>Start a workflow to track its progress and view the saved result.</small></span>}
+                        {job?.error && <p className="workspace-error" role="alert">{job.error}</p>}
+                    </section>
+                </section>
+                <aside className="workspace-sidebar" aria-label="Performance metrics and model configuration">
+                    <section className="metrics-grid" aria-label="System resource usage">{snapshot.resources.map(metric => <MetricDial key={metric.key} metric={metric} />)}</section>
+                    <section className="configuration-panel">
+                        <h1>Model configuration</h1>
+                        <label className="configuration-row"><SvgPlaceholder name="model-role" /><span className="configuration-row__copy"><strong>Model role</strong><small>Select the model&apos;s behavior type</small></span><select value={modelRole} onChange={event => setModelRole(event.target.value as 'finisher' | 'creative')}><option value="finisher">Finisher</option><option value="creative">Creative</option></select></label>
+                        <label className="configuration-row"><SvgPlaceholder name="image-scale-divider" /><span className="configuration-row__copy"><strong>Image scale divider</strong><small>Select image downscaling ratio</small></span><select defaultValue="2"><option value="1">1x</option><option value="2">2x</option><option value="4">4x</option></select></label>
+                        <label className="configuration-row"><SvgPlaceholder name="angle-explorer" /><span className="configuration-row__copy"><strong>Angle explorer</strong><small>Generate different angles</small></span><input className="toggle-input" type="checkbox" checked={angleExplorer} onChange={event => setAngleExplorer(event.target.checked)} /><span className="toggle" aria-hidden="true"><i /></span></label>
+                        <label className="configuration-row"><SvgPlaceholder name="character-pose" /><span className="configuration-row__copy"><strong>Character pose</strong><small>Generate different poses</small></span><input className="toggle-input" type="checkbox" checked={characterPose} onChange={event => setCharacterPose(event.target.checked)} /><span className="toggle" aria-hidden="true"><i /></span></label>
+                        <label className="configuration-row"><SvgPlaceholder name="output-amount" /><span className="configuration-row__copy"><strong>Amount of output</strong><small>Select number of generated images</small></span><select value={outputAmount} onChange={event => setOutputAmount(Number(event.target.value))}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+                    </section>
+                </aside>
+            </div>
+        </main>
+    );
+}
+
 function SetupCard({
     backUrl,
     product,
@@ -141,26 +245,19 @@ function SetupCard({
     );
 }
 
-function Workspace({ backUrl }: { backUrl: string }) {
+function Workspace({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; dashboardUrl: string; workflowUrl: string }) {
     const imageInput = useRef<HTMLInputElement>(null);
     const slotConceptInput = useRef<HTMLInputElement>(null);
-    const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(workspacePlaceholder);
     const [referenceImage, setReferenceImage] = useState<string>('');
     const [referenceFile, setReferenceFile] = useState<File | null>(null);
     const [referenceName, setReferenceName] = useState('');
-    const [activePanel, setActivePanel] = useState<'reference' | 'concept' | 'result'>('reference');
+    const [activePanel, setActivePanel] = useState<'reference' | 'concept'>('reference');
     const [slotConceptImage, setSlotConceptImage] = useState('');
     const [slotConceptFile, setSlotConceptFile] = useState<File | null>(null);
     const [slotConceptName, setSlotConceptName] = useState('');
     const [isDragging, setIsDragging] = useState(false);
-    const [additionalPrompt, setAdditionalPrompt] = useState('');
     const [positivePrompt, setPositivePrompt] = useState('');
     const [negativePrompt, setNegativePrompt] = useState('');
-    const [modelRole, setModelRole] = useState<'finisher' | 'creative'>('finisher');
-    const [outputAmount, setOutputAmount] = useState(3);
-    const [angleExplorer, setAngleExplorer] = useState(true);
-    const [characterPose, setCharacterPose] = useState(true);
-    const [job, setJob] = useState<AniSlotJob | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationError, setGenerationError] = useState('');
 
@@ -186,66 +283,31 @@ function Workspace({ backUrl }: { backUrl: string }) {
         }
     };
 
-    useEffect(() => {
-        if (!job || ['completed', 'failed', 'canceled'].includes(job.status)) return;
-        let cancelled = false;
-        let timer: number | undefined;
-        const poll = async () => {
-            try {
-                const updated = await getAniSlotJob(job.itemId);
-                if (cancelled) return;
-                setJob(updated);
-                if (updated.status === 'completed' && updated.imageUrl) setActivePanel('result');
-                setSnapshot(previous => ({
-                    ...previous,
-                    status: updated.status.replace('_', ' '),
-                    currentNode: updated.status === 'in_progress' ? 'InvokeAI workflow is running' : 'Waiting for InvokeAI',
-                    estimatedTime: updated.status === 'in_progress' ? 'Processing' : '—',
-                }));
-                if (!['completed', 'failed', 'canceled'].includes(updated.status)) timer = window.setTimeout(poll, 1200);
-            } catch (requestError) {
-                if (!cancelled) {
-                    setGenerationError('');
-                    setSnapshot(previous => ({
-                        ...previous,
-                        status: 'Reconnecting',
-                        currentNode: 'Waiting for InvokeAI to respond',
-                        estimatedTime: '—',
-                    }));
-                    timer = window.setTimeout(poll, 2500);
-                }
-            }
-        };
-        void poll();
-        return () => { cancelled = true; if (timer !== undefined) window.clearTimeout(timer); };
-    }, [job?.itemId]);
-
     const handleGenerate = async () => {
         if (!referenceFile || isGenerating) {
             setGenerationError('Add a reference image before generating.');
             return;
         }
+        const modelRole = localStorage.getItem('anislot.modelRole') === 'creative' ? 'creative' : 'finisher';
+        const outputAmount = Number(localStorage.getItem('anislot.outputAmount') || '3');
         const modeInstruction = modelRole === 'finisher'
             ? 'Preserve the object identity, silhouette, perspective, and key color palette. Improve only finish and production quality.'
             : 'Keep the object identity, perspective, and key color family. Explore alternative details, materials, and decorative ideas.';
         setGenerationError('');
         setIsGenerating(true);
-        setJob(null);
-        setSnapshot(previous => ({...previous, status: 'Queueing', currentNode: 'Uploading reference image', estimatedTime: '—'}));
         try {
             const queued = await generateAniSlot({
                 image: referenceFile,
                 slotConceptImage: slotConceptFile || undefined,
-                positivePrompt: [modeInstruction, additionalPrompt, positivePrompt].filter(Boolean).join('\n\n'),
+                positivePrompt: [modeInstruction, positivePrompt].filter(Boolean).join('\n\n'),
                 negativePrompt,
                 runs: modelRole === 'creative' ? outputAmount : 1,
             });
-            setJob({itemId: queued.itemId, status: 'queued'});
-            setSnapshot(previous => ({...previous, status: 'Queued', currentNode: `${queued.itemIds.length} job${queued.itemIds.length === 1 ? '' : 's'} in InvokeAI queue`}));
+            localStorage.setItem('anislot.activeJobId', queued.itemId);
+            window.location.assign(dashboardUrl);
         } catch (requestError) {
             const message = requestError instanceof Error ? requestError.message : 'Generation could not start.';
             setGenerationError(message);
-            setSnapshot(previous => ({...previous, status: 'Error', currentNode: message, estimatedTime: '—'}));
         } finally {
             setIsGenerating(false);
         }
@@ -273,7 +335,7 @@ function Workspace({ backUrl }: { backUrl: string }) {
             ?.getAsFile();
         if (image) {
             event.preventDefault();
-            useImage(activePanel === 'concept' ? 'concept' : 'reference', image);
+            useImage(activePanel, image);
         }
     };
 
@@ -285,42 +347,17 @@ function Workspace({ backUrl }: { backUrl: string }) {
                         <span>B</span><span>W</span>
                     </span>
                 </a>
-                <nav className="workspace-nav" aria-label="Main navigation">
-                    <a className="workspace-nav__link" href={backUrl}>
-                        <span className="workspace-nav__icon" aria-hidden="true">▦</span>
-                        <span>Dashboard</span>
-                    </a>
-                    <a className="workspace-nav__link is-active" href="/anislot/core/" aria-current="page">
-                        <span className="workspace-nav__icon" aria-hidden="true">✦</span>
-                        <span>Workflow<small>Design Helper</small></span>
-                    </a>
-                </nav>
+                <WorkspaceNav dashboardUrl={dashboardUrl} workflowUrl={workflowUrl} active="workflow" />
                 <span className="workspace-rail__glow" aria-hidden="true" />
             </aside>
 
-            <div className="workspace-shell">
+            <div className="workspace-shell workspace-shell--workflow">
                 <section className="workspace-main" aria-label="Generation workspace">
-                    <div className="workflow-summary">
-                        <article className="summary-card" data-backend-field="job.status">
-                            <span>Status</span>
-                            <strong className="summary-card__status"><i />{snapshot.status}</strong>
-                        </article>
-                        <article className="summary-card" data-backend-field="job.currentNode">
-                            <span>Current node</span>
-                            <strong>{snapshot.currentNode}</strong>
-                        </article>
-                        <article className="summary-card" data-backend-field="job.estimatedTime">
-                            <span>Estimated time</span>
-                            <strong>{snapshot.estimatedTime}</strong>
-                        </article>
-                    </div>
-
                     <section className="reference-panel">
                         <header className="panel-heading">
                             <div className="panel-heading__tabs" role="tablist" aria-label="Artwork view">
                                 <button className={activePanel === 'reference' ? 'is-active' : ''} type="button" role="tab" aria-selected={activePanel === 'reference'} onClick={() => setActivePanel('reference')}>Reference image</button>
                                 <button className={activePanel === 'concept' ? 'is-active' : ''} type="button" role="tab" aria-selected={activePanel === 'concept'} onClick={() => setActivePanel('concept')}>Slot Concept</button>
-                                <button className={activePanel === 'result' ? 'is-active' : ''} type="button" role="tab" aria-selected={activePanel === 'result'} onClick={() => setActivePanel('result')}>Final Generation</button>
                             </div>
                         </header>
                         {activePanel === 'reference' ? (
@@ -332,10 +369,6 @@ function Workspace({ backUrl }: { backUrl: string }) {
                                     </button>
                                     {referenceImage && <button className="reference-input__replace" type="button" onClick={() => imageInput.current?.click()}>Replace image</button>}
                                 </div>
-                                <label className="prompt-field prompt-field--additional">
-                                    <span>Additional prompt</span>
-                                    <textarea data-backend-input="additionalPrompt" placeholder="Add composition, style, lighting, or detail guidance..." value={additionalPrompt} onChange={event => setAdditionalPrompt(event.target.value)} />
-                                </label>
                             </div>
                         ) : activePanel === 'concept' ? (
                             <div className="reference-panel__content">
@@ -351,11 +384,7 @@ function Workspace({ backUrl }: { backUrl: string }) {
                                     <p>Add an image showing how the slot should look: its composition, rendering, color treatment, interface language, or atmosphere.</p>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="slot-concept" role="tabpanel">
-                                {job?.imageUrl ? <img src={job.imageUrl} alt="Final generated slot concept" /> : <span><strong>Final Generation will appear here</strong><small>Run the workflow to view the completed image in this tab.</small></span>}
-                            </div>
-                        )}
+                        ) : null}
                     </section>
 
                     <div className="prompt-grid">
@@ -378,95 +407,20 @@ function Workspace({ backUrl }: { backUrl: string }) {
                             />
                         </label>
                     </div>
-                </section>
-
-                <aside className="workspace-sidebar" aria-label="System metrics and model configuration">
-                    <section className="metrics-grid" aria-label="System resource usage">
-                        {snapshot.resources.map(metric => <MetricDial key={metric.key} metric={metric} />)}
-                    </section>
-
-                    <section className="configuration-panel">
-                        <h1>Model configuration</h1>
-                        <label className="configuration-row">
-                            <SvgPlaceholder name="model-role" />
-                            <span className="configuration-row__copy">
-                                <strong>Model role</strong>
-                                <small>Select the model&apos;s behavior type</small>
-                            </span>
-                            <select value={modelRole} onChange={event => setModelRole(event.target.value as 'finisher' | 'creative')} data-backend-input="modelRole" aria-label="Model role">
-                                <option value="finisher">Finisher</option>
-                                <option value="creative">Creative</option>
-                            </select>
-                        </label>
-                        <label className="configuration-row">
-                            <SvgPlaceholder name="image-scale-divider" />
-                            <span className="configuration-row__copy">
-                                <strong>Image scale divider</strong>
-                                <small>Select image downscaling ratio</small>
-                            </span>
-                            <select defaultValue="2" data-backend-input="scaleDivider" aria-label="Image scale divider">
-                                <option value="1">1x</option>
-                                <option value="2">2x</option>
-                                <option value="4">4x</option>
-                            </select>
-                        </label>
-                        <label className="configuration-row">
-                            <SvgPlaceholder name="angle-explorer" />
-                            <span className="configuration-row__copy">
-                                <strong>Angle explorer</strong>
-                                <small>Generate different angles</small>
-                            </span>
-                            <input
-                                className="toggle-input"
-                                type="checkbox"
-                                checked={angleExplorer}
-                                onChange={event => setAngleExplorer(event.target.checked)}
-                                data-backend-input="angleExplorer"
-                            />
-                            <span className="toggle" aria-hidden="true"><i /></span>
-                        </label>
-                        <label className="configuration-row">
-                            <SvgPlaceholder name="character-pose" />
-                            <span className="configuration-row__copy">
-                                <strong>Character pose</strong>
-                                <small>Generate different poses</small>
-                            </span>
-                            <input
-                                className="toggle-input"
-                                type="checkbox"
-                                checked={characterPose}
-                                onChange={event => setCharacterPose(event.target.checked)}
-                                data-backend-input="characterPose"
-                            />
-                            <span className="toggle" aria-hidden="true"><i /></span>
-                        </label>
-                        <label className="configuration-row">
-                            <SvgPlaceholder name="output-amount" />
-                            <span className="configuration-row__copy">
-                                <strong>Amount of output</strong>
-                                <small>Select number of generated images</small>
-                            </span>
-                            <select value={outputAmount} onChange={event => setOutputAmount(Number(event.target.value))} data-backend-input="outputAmount" aria-label="Amount of output">
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                                <option value="4">4</option>
-                            </select>
-                        </label>
-                        <button className="generate-button" type="button" data-backend-action="generate" onClick={handleGenerate} disabled={isGenerating || !referenceFile}>
-                            {isGenerating ? 'Queueing…' : 'Generate'}
+                    <div className="workflow-actions">
+                        <button className="generate-button" type="button" onClick={handleGenerate} disabled={isGenerating || !referenceFile}>
+                            {isGenerating ? 'Queueing…' : 'Generate and open Dashboard'}
                             <span aria-hidden="true">↗</span>
                         </button>
                         {generationError && <p className="workspace-error" role="alert">{generationError}</p>}
-                        {job?.error && <p className="workspace-error" role="alert">{job.error}</p>}
-                    </section>
-                </aside>
+                    </div>
+                </section>
             </div>
         </main>
     );
 }
 
-export default function AniSlot({ backUrl }: { backUrl: string }) {
+function WorkflowScreen({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; dashboardUrl: string; workflowUrl: string }) {
     const [product, setProduct] = useState<ApiProduct | null>(null);
     const [error, setError] = useState('');
     const [repositoryUrl, setRepositoryUrl] = useState('');
@@ -515,7 +469,7 @@ export default function AniSlot({ backUrl }: { backUrl: string }) {
         }
     };
 
-    if (repositoryReady) return <Workspace backUrl={backUrl} />;
+    if (repositoryReady) return <Workspace backUrl={backUrl} dashboardUrl={dashboardUrl} workflowUrl={workflowUrl} />;
 
     return (
         <SetupCard
@@ -530,4 +484,21 @@ export default function AniSlot({ backUrl }: { backUrl: string }) {
             onSubmit={handleSubmit}
         />
     );
+}
+
+export default function AniSlot({
+    backUrl,
+    dashboardUrl = '/dashboard/',
+    workflowUrl = '/anislot/core/',
+    page = 'workflow',
+}: {
+    backUrl: string;
+    dashboardUrl?: string;
+    workflowUrl?: string;
+    page?: 'dashboard' | 'workflow';
+}) {
+    if (page === 'dashboard') {
+        return <Dashboard backUrl={backUrl} dashboardUrl={dashboardUrl} workflowUrl={workflowUrl} />;
+    }
+    return <WorkflowScreen backUrl={backUrl} dashboardUrl={dashboardUrl} workflowUrl={workflowUrl} />;
 }

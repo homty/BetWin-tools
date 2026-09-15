@@ -43,6 +43,13 @@ if (onboardRoot) {
 const anislotRoot = document.getElementById('anislot-root');
 if (anislotRoot) {
     createRoot(anislotRoot).render(
-        <StrictMode><AniSlot backUrl={anislotRoot.dataset.backUrl || '/'} /></StrictMode>,
+        <StrictMode>
+            <AniSlot
+                backUrl={anislotRoot.dataset.backUrl || '/products/'}
+                dashboardUrl={anislotRoot.dataset.dashboardUrl || '/dashboard/'}
+                workflowUrl={anislotRoot.dataset.workflowUrl || '/anislot/core/'}
+                page={anislotRoot.dataset.page === 'dashboard' ? 'dashboard' : 'workflow'}
+            />
+        </StrictMode>,
     );
 }

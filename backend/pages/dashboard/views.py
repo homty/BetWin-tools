@@ -29,6 +29,11 @@ def home(request):
 
 
 @ensure_csrf_cookie
+def dashboard(request):
+    return render(request, 'dashboard/dashboard.html')
+
+
+@ensure_csrf_cookie
 def anislot(request):
     if anislot_is_configured():
         return redirect('dashboard:anislot_core')
