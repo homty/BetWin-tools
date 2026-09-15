@@ -9,8 +9,8 @@ import re
 import subprocess
 from urllib.parse import urlparse
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-WORKSPACE_DIR = BASE_DIR.parent / "workspaces"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+WORKSPACE_DIR = REPOSITORY_ROOT / 'workspaces'
 
 ALLOWED_SSH_HOSTS = {"github.com", "github-anislot"}
 REPOSITORY_PATH_PATTERN = re.compile(
