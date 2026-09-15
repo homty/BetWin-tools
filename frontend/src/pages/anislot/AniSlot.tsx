@@ -159,7 +159,7 @@ function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
                 </section>
                 <section className="metrics-grid dashboard-metrics" aria-label="System resource usage">{snapshot.resources.map(metric => <MetricDial key={metric.key} metric={metric} />)}</section>
                 <section className="dashboard-output">
-                    <header className="panel-heading"><span>Final Output</span></header>
+                    <header className="panel-heading"><span>Gallery</span></header>
                     {job?.imageUrl ? <img src={job.imageUrl} alt="Final generated slot concept" /> : <span><strong>Final Generation will appear here</strong><small>Start a workflow to track its progress and view the saved result.</small></span>}
                     {job?.error && <p className="workspace-error" role="alert">{job.error}</p>}
                 </section>
@@ -171,6 +171,22 @@ function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
                         <label className="configuration-row"><SvgPlaceholder name="character-pose" /><span className="configuration-row__copy"><strong>Character pose</strong><small>Generate different poses</small></span><input className="toggle-input" type="checkbox" checked={characterPose} onChange={event => setCharacterPose(event.target.checked)} /><span className="toggle" aria-hidden="true"><i /></span></label>
                         <label className="configuration-row"><SvgPlaceholder name="output-amount" /><span className="configuration-row__copy"><strong>Amount of output</strong><small>Select number of generated images</small></span><select value={outputAmount} onChange={event => setOutputAmount(Number(event.target.value))}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
                 </aside>
+                <section className="model-roles-panel" aria-label="Model roles">
+                    <h2>Model role</h2>
+                    <button className="model-role-card" type="button" onClick={() => setModelRole('finisher')} data-active={modelRole === 'finisher'}>
+                        <SvgPlaceholder name="finisher-role" />
+                        <span><strong>Detailer</strong><small>Finish reference to production style</small></span>
+                        <img src="/static/frontend/icons/edit.svg" alt="Edit Detailer role" />
+                    </button>
+                    <button className="model-role-card" type="button" onClick={() => setModelRole('creative')} data-active={modelRole === 'creative'}>
+                        <SvgPlaceholder name="creative-role" />
+                        <span><strong>Brainstormer</strong><small>Help to find ideas for design</small></span>
+                        <img src="/static/frontend/icons/edit.svg" alt="Edit Brainstormer role" />
+                    </button>
+                    <button className="model-role-add" type="button" aria-label="Add model role">
+                        <img src="/static/frontend/icons/add.svg" alt="" />
+                    </button>
+                </section>
             </div>
         </main>
     );
