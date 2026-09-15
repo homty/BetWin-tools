@@ -229,7 +229,7 @@
 }
 
 .dashboard-status { grid-area: status; }
-.dashboard-metrics {
+.metrics-grid.dashboard-metrics {
     grid-area: metrics;
     display: flex;
     flex-wrap: nowrap;
@@ -238,7 +238,7 @@
     overflow-x: auto;
     scrollbar-width: thin;
 }
-.dashboard-metrics .metric-dial { width: 96px; flex: 0 0 96px; }
+.metrics-grid.dashboard-metrics .metric-dial { width: 96px; flex: 0 0 96px; }
 .dashboard-output { grid-area: output; }
 .dashboard-configuration { grid-area: configuration; }
 
@@ -564,7 +564,7 @@
             "output"
             "configuration";
     }
-    .dashboard-metrics { justify-content: start; }
+    .metrics-grid.dashboard-metrics { justify-content: start; }
     .workspace-sidebar { display: grid; grid-template-columns: minmax(300px, .85fr) minmax(420px, 1.15fr); align-items: start; }
 }
 
