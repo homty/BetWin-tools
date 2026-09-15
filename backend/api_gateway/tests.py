@@ -11,6 +11,7 @@ from .clone_service import (
     validate_repository_url,
 )
 from .models import Product, SetupJob
+from .workflow_builder import AniSlotWorkflowBuilder
 
 
 class RepositoryUrlTests(SimpleTestCase):
@@ -148,10 +149,41 @@ class AniSlotGenerateTests(TestCase):
         client.upload_image.assert_called_once()
         builder_class.return_value.build.assert_called_once_with(
             image_name='uploaded.png',
+            slot_concept_image_name=None,
+            slot_concept_prompt=None,
             positive_prompt='polished anime symbol',
             negative_prompt=None,
             seed=42,
             width=768,
+        )
+
+    @patch('api_gateway.views.AniSlotWorkflowBuilder')
+    @patch('api_gateway.views.InvokeClient')
+    def test_uploads_optional_slot_concept(self, client_class, builder_class):
+        client = client_class.return_value
+        client.upload_image.side_effect = [
+            {'image_name': 'source.png'},
+            {'image_name': 'concept.png'},
+        ]
+        client.enqueue_graph.return_value = {'item_ids': ['queue-item-1']}
+        builder_class.return_value.build.return_value = {'id': 'graph-1', 'nodes': {}, 'edges': []}
+
+        response = self.client.post('/api/anislot/generate/', data={
+            'image': SimpleUploadedFile('source.png', b'source', content_type='image/png'),
+            'slotConceptImage': SimpleUploadedFile('concept.png', b'concept', content_type='image/png'),
+            'slotConceptPrompt': 'icy Norse mythology with blue crystal light',
+        })
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(client.upload_image.call_count, 2)
+        builder_class.return_value.build.assert_called_once_with(
+            image_name='source.png',
+            slot_concept_image_name='concept.png',
+            slot_concept_prompt='icy Norse mythology with blue crystal light',
+            positive_prompt=None,
+            negative_prompt=None,
+            seed=None,
+            width=None,
         )
 
     @patch('api_gateway.views.InvokeClient')
@@ -178,3 +210,64 @@ class AniSlotGenerateTests(TestCase):
             'imageName': 'generated.png',
             'imageUrl': '/api/anislot/images/generated.png/',
         })
+
+
+class AniSlotWorkflowBuilderTests(SimpleTestCase):
+    def test_omitting_slot_concept_keeps_original_reference_graph(self):
+        builder = AniSlotWorkflowBuilder()
+
+        graph = builder.build(image_name='source.png')
+
+        self.assertNotIn(builder.SLOT_CONCEPT_IMAGE_NODE, graph['nodes'])
+        self.assertNotIn(builder.SLOT_CONCEPT_COLLECTION_NODE, graph['nodes'])
+        self.assertTrue(any(
+            edge['source'] == {'node_id': builder.REFERENCE_IMAGES_NODE, 'field': 'collection'}
+            and edge['destination'] == {
+                'node_id': builder.POSITIVE_TEXT_ENCODER_NODE,
+                'field': 'reference_images',
+            }
+            for edge in graph['edges']
+        ))
+
+    def test_slot_concept_adds_second_reference_and_prompt_guidance(self):
+        builder = AniSlotWorkflowBuilder()
+
+        graph = builder.build(
+            image_name='source.png',
+            slot_concept_image_name='concept.png',
+            slot_concept_prompt='icy Norse mythology',
+        )
+
+        self.assertEqual(
+            graph['nodes'][builder.SLOT_CONCEPT_IMAGE_NODE]['image'],
+            {'image_name': 'concept.png'},
+        )
+        prompt = graph['nodes'][builder.POSITIVE_PROMPT_NODE]['value']
+        self.assertIn('Reference image 1 is the source symbol', prompt)
+        self.assertIn('Reference image 2 is the slot concept', prompt)
+        self.assertIn('Slot concept direction: icy Norse mythology', prompt)
+        self.assertTrue(any(
+            edge['source'] == {
+                'node_id': builder.SLOT_CONCEPT_COLLECTION_NODE,
+                'field': 'collection',
+            }
+            and edge['destination'] == {
+                'node_id': builder.POSITIVE_TEXT_ENCODER_NODE,
+                'field': 'reference_images',
+            }
+            for edge in graph['edges']
+        ))
+
+    def test_slot_concept_prompt_works_without_an_image(self):
+        builder = AniSlotWorkflowBuilder()
+
+        graph = builder.build(
+            image_name='source.png',
+            slot_concept_prompt='warm Egyptian treasure chamber',
+        )
+
+        self.assertNotIn(builder.SLOT_CONCEPT_IMAGE_NODE, graph['nodes'])
+        self.assertIn(
+            'Slot concept direction: warm Egyptian treasure chamber',
+            graph['nodes'][builder.POSITIVE_PROMPT_NODE]['value'],
+        )
