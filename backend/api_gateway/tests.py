@@ -4,14 +4,14 @@ from unittest.mock import patch
 from django.test import SimpleTestCase, TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from .clone_service import (
+from .services.repository import (
     clone_environment,
     existing_repository_matches,
     normalize_repository_url,
     validate_repository_url,
 )
 from .models import Product, SetupJob
-from .workflow_builder import AniSlotWorkflowBuilder
+from .workflows.anislot import AniSlotWorkflowBuilder
 
 
 class RepositoryUrlTests(SimpleTestCase):
@@ -53,8 +53,8 @@ class RepositoryUrlTests(SimpleTestCase):
             expected,
         )
 
-    @patch('api_gateway.clone_service.Path.is_file', return_value=True)
-    @patch('api_gateway.clone_service.Path.home', return_value=Path('C:/Users/test'))
+    @patch('api_gateway.services.repository.Path.is_file', return_value=True)
+    @patch('api_gateway.services.repository.Path.home', return_value=Path('C:/Users/test'))
     def test_ssh_clone_uses_anislot_deploy_key(self, _home, _is_file):
         environment = clone_environment(
             'git@github.com:homty/AniSlot-Invoke-Workflow.git'
@@ -70,8 +70,8 @@ class RepositoryUrlTests(SimpleTestCase):
             'https://github.com/homty/AniSlot-Invoke-Workflow.git'
         ))
 
-    @patch('api_gateway.clone_service.Path.is_dir', return_value=True)
-    @patch('api_gateway.clone_service.subprocess.run')
+    @patch('api_gateway.services.repository.Path.is_dir', return_value=True)
+    @patch('api_gateway.services.repository.subprocess.run')
     def test_existing_repository_matches_across_url_formats(self, run, _is_dir):
         run.return_value.returncode = 0
         run.return_value.stdout = 'git@github-anislot:homty/AniSlot-Invoke-Workflow.git\n'
@@ -145,7 +145,11 @@ class AniSlotGenerateTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 202)
-        self.assertEqual(response.json(), {'status': 'queued', 'itemId': 'queue-item-1'})
+        self.assertEqual(response.json(), {
+            'status': 'queued',
+            'itemId': 'queue-item-1',
+            'itemIds': ['queue-item-1'],
+        })
         client.upload_image.assert_called_once()
         builder_class.return_value.build.assert_called_once_with(
             image_name='uploaded.png',
@@ -155,6 +159,10 @@ class AniSlotGenerateTests(TestCase):
             negative_prompt=None,
             seed=42,
             width=768,
+        )
+        client.enqueue_graph.assert_called_once_with(
+            builder_class.return_value.build.return_value,
+            runs=1,
         )
 
     @patch('api_gateway.views.AniSlotWorkflowBuilder')
@@ -186,8 +194,9 @@ class AniSlotGenerateTests(TestCase):
             width=None,
         )
 
+    @patch('api_gateway.views.AniSlotResultStore')
     @patch('api_gateway.views.InvokeClient')
-    def test_completed_job_returns_a_django_image_url(self, client_class):
+    def test_completed_job_returns_a_saved_result_url(self, client_class, store_class):
         client_class.image_names_from_results.return_value = ['generated.png']
         client_class.return_value.queue_item.return_value = {
             'status': 'completed',
@@ -200,6 +209,7 @@ class AniSlotGenerateTests(TestCase):
                 },
             },
         }
+        client_class.return_value.download_image.return_value = (b'generated-image', 'image/png')
 
         response = self.client.get('/api/anislot/jobs/queue-item-1/')
 
@@ -208,8 +218,13 @@ class AniSlotGenerateTests(TestCase):
             'itemId': 'queue-item-1',
             'status': 'completed',
             'imageName': 'generated.png',
-            'imageUrl': '/api/anislot/images/generated.png/',
+            'imageUrl': '/api/anislot/results/queue-item-1/',
         })
+        store_class.return_value.save.assert_called_once_with(
+            'queue-item-1',
+            'generated.png',
+            b'generated-image',
+        )
 
 
 class AniSlotWorkflowBuilderTests(SimpleTestCase):

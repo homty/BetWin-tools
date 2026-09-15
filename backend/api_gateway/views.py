@@ -4,12 +4,12 @@ from django.http import HttpResponse, JsonResponse
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
-from .clone_service import clone_repository, existing_repository_matches, repository_destination
-from .invoke_client import InvokeClient, InvokeError
 from .models import CodeSubmission, Product
-from .pipeline_client import ModelPipelineClient, PipelineError
-from .result_store import AniSlotResultStore
-from .workflow_builder import AniSlotWorkflowBuilder, WorkflowBuildError
+from .services.invoke import InvokeClient, InvokeError
+from .services.pipeline import ModelPipelineClient, PipelineError
+from .services.repository import clone_repository, existing_repository_matches, repository_destination
+from .services.results import AniSlotResultStore
+from .workflows.anislot import AniSlotWorkflowBuilder, WorkflowBuildError
 
 
 @require_GET

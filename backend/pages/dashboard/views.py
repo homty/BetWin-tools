@@ -1,7 +1,7 @@
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from api_gateway.clone_service import existing_repository_matches, repository_destination
+from api_gateway.services.repository import existing_repository_matches, repository_destination
 from api_gateway.models import Product
 
 

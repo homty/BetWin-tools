@@ -25,7 +25,7 @@ class AniSlotWorkflowBuilder:
     SLOT_CONCEPT_COLLECTION_NODE = '7db37a44-2398-42ae-ae3c-c8f691a47767'
 
     def __init__(self, workflow_path: str | Path | None = None):
-        repository_root = Path(__file__).resolve().parents[2]
+        repository_root = Path(__file__).resolve().parents[3]
         default_path = repository_root / 'workspaces' / 'anislot' / 'workflow' / 'Workflow.json'
         self.workflow_path = Path(
             workflow_path or os.environ.get('ANISLOT_WORKFLOW_PATH', default_path)
