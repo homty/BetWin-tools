@@ -1,11 +1,14 @@
 import json
 
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from .clone_service import clone_repository, existing_repository_matches, repository_destination
+from .invoke_client import InvokeClient, InvokeError
 from .models import CodeSubmission, Product, SetupJob
 from .pipeline_client import ModelPipelineClient, PipelineError
+from .workflow_builder import AniSlotWorkflowBuilder, WorkflowBuildError
 
 
 @require_GET
@@ -28,6 +31,94 @@ def pipeline(request):
         return JsonResponse(ModelPipelineClient().forward(payload))
     except PipelineError as error:
         return JsonResponse({'error': str(error)}, status=error.status_code)
+
+
+@require_POST
+def anislot_generate(request):
+    image = request.FILES.get('image')
+    if image is None:
+        return JsonResponse({'error': 'A reference image is required.'}, status=400)
+
+    try:
+        seed = _optional_integer(request.POST.get('seed'), 'seed')
+        width = _optional_integer(request.POST.get('width'), 'width')
+        runs = _optional_integer(request.POST.get('runs'), 'runs') or 1
+        if seed is not None and seed < 0:
+            raise ValueError('seed must be a non-negative integer.')
+        if width is not None and width < 64:
+            raise ValueError('width must be an integer of at least 64.')
+        if not 1 <= runs <= 4:
+            raise ValueError('runs must be between 1 and 4.')
+
+        client = InvokeClient()
+        uploaded = client.upload_image(image.read(), image.name, image.content_type)
+        image_name = uploaded.get('image_name')
+        if not isinstance(image_name, str) or not image_name:
+            raise InvokeError('InvokeAI uploaded the image but did not return image_name.')
+
+        graph = AniSlotWorkflowBuilder().build(
+            image_name=image_name,
+            positive_prompt=_optional_text(request.POST.get('positivePrompt')),
+            negative_prompt=_optional_text(request.POST.get('negativePrompt')),
+            seed=seed,
+            width=width,
+        )
+        queued = client.enqueue_graph(graph, runs=runs)
+        item_ids = queued['item_ids']
+    except (InvokeError, WorkflowBuildError) as error:
+        return JsonResponse({'error': str(error)}, status=error.status_code)
+    except ValueError as error:
+        return JsonResponse({'error': str(error)}, status=400)
+
+    return JsonResponse({'status': 'queued', 'itemId': item_ids[0], 'itemIds': item_ids}, status=202)
+
+
+@require_GET
+def anislot_job(request, item_id):
+    try:
+        item = InvokeClient().queue_item(item_id)
+    except InvokeError as error:
+        return JsonResponse({'error': str(error)}, status=error.status_code)
+
+    status = item.get('status')
+    if not isinstance(status, str):
+        return JsonResponse({'error': 'InvokeAI returned a job without a status.'}, status=502)
+    response = {'itemId': item_id, 'status': status}
+    if status in {'failed', 'canceled'}:
+        response['error'] = item.get('error_message') or f'InvokeAI job {status}.'
+    elif status == 'completed':
+        session = item.get('session')
+        results = session.get('results') if isinstance(session, dict) else None
+        image_names = InvokeClient.image_names_from_results(results)
+        if image_names:
+            image_name = image_names[-1]
+            response['imageName'] = image_name
+            response['imageUrl'] = reverse('api_gateway:anislot_image', args=[image_name])
+        else:
+            response['error'] = 'InvokeAI completed the job but returned no image output.'
+    return JsonResponse(response)
+
+
+@require_GET
+def anislot_image(request, image_name):
+    try:
+        content, content_type = InvokeClient().download_image(image_name)
+    except InvokeError as error:
+        return JsonResponse({'error': str(error)}, status=error.status_code)
+    return HttpResponse(content, content_type=content_type)
+
+
+def _optional_text(value):
+    return value.strip() or None if value is not None else None
+
+
+def _optional_integer(value, field_name):
+    if value is None or not value.strip():
+        return None
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ValueError(f'{field_name} must be an integer.') from error
 
 
 @require_GET
