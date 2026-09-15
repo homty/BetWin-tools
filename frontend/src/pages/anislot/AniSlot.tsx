@@ -1,31 +1,107 @@
-import { FormEvent, useEffect, useState } from 'react';
+import {
+    CSSProperties,
+    ChangeEvent,
+    ClipboardEvent,
+    DragEvent,
+    FormEvent,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
 import BetWinWord from '../../components/brand/BetWinWord';
-import { ApiProduct, fetchProducts } from '../../services/products';
+import { ApiProduct, fetchProducts, fetchSetupStatus, startSetup } from '../../services/products';
 
-export default function AniSlot({ backUrl }: { backUrl: string }) {
-    const [product, setProduct] = useState<ApiProduct | null>(null);
-    const [error, setError] = useState('');
-    const [repositoryUrl, setRepositoryUrl] = useState('');
+type ResourceMetric = {
+    key: 'gpu' | 'vram' | 'cpu' | 'ram';
+    label: string;
+    value: number;
+};
 
-    useEffect(() => {
-        fetchProducts()
-            .then(products => setProduct(products.find(item => item.name === 'AniSlot') || null))
-            .catch((requestError: Error) => setError(requestError.message));
-    }, []);
+type WorkspaceSnapshot = {
+    status: string;
+    currentNode: string;
+    estimatedTime: string;
+    resources: ResourceMetric[];
+};
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!repositoryUrl.trim()) return;
-        // The next step will send this URL to Django for validation and setup.
-        console.log('Repository selected for setup:', repositoryUrl.trim());
-    };
+const workspacePlaceholder: WorkspaceSnapshot = {
+    status: 'Ready',
+    currentNode: 'Waiting for a job',
+    estimatedTime: '—',
+    resources: [
+        { key: 'gpu', label: 'GPU', value: 68 },
+        { key: 'vram', label: 'VRAM', value: 54 },
+        { key: 'cpu', label: 'CPU', value: 31 },
+        { key: 'ram', label: 'RAM', value: 46 },
+    ],
+};
+
+function SvgPlaceholder({ name }: { name: string }) {
+    return (
+        <span className="workspace-svg-placeholder" data-svg-placeholder={name} aria-hidden="true">
+            <span className="workspace-svg-placeholder__head" />
+            <span className="workspace-svg-placeholder__body" />
+        </span>
+    );
+}
+
+function ReferenceArtwork() {
+    return (
+        <span className="reference-artwork" data-svg-placeholder="reference-image-upload" aria-hidden="true">
+            <span className="reference-artwork__frame" />
+            <span className="reference-artwork__sun" />
+            <span className="reference-artwork__mountains" />
+            <span className="reference-artwork__arrow" />
+        </span>
+    );
+}
+
+function MetricDial({ metric }: { metric: ResourceMetric }) {
+    const safeValue = Math.min(100, Math.max(0, metric.value));
+    const style = { '--meter-value': `${safeValue * 3.6}deg` } as CSSProperties;
 
     return (
-        <main className="anislot-page">
+        <article
+            className="metric-dial"
+            data-backend-field={`resources.${metric.key}`}
+            style={style}
+            aria-label={`${metric.label} usage ${safeValue}%`}
+        >
+            <div className="metric-dial__inner">
+                <strong>{metric.label}</strong>
+                <span>{safeValue}%</span>
+            </div>
+        </article>
+    );
+}
+
+function SetupCard({
+    backUrl,
+    product,
+    error,
+    repositoryUrl,
+    setupStatus,
+    isCheckingSetup,
+    isSubmitting,
+    onRepositoryChange,
+    onSubmit,
+}: {
+    backUrl: string;
+    product: ApiProduct | null;
+    error: string;
+    repositoryUrl: string;
+    setupStatus: string;
+    isCheckingSetup: boolean;
+    isSubmitting: boolean;
+    onRepositoryChange: (value: string) => void;
+    onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+    return (
+        <main className="anislot-page anislot-page--setup">
             <a className="anislot-brand" href={backUrl} aria-label="Back to product selection">
                 <BetWinWord className="anislot-brand__name" />
             </a>
-            <form className="anislot-card" onSubmit={handleSubmit}>
+            <form className="anislot-card" onSubmit={onSubmit}>
                 <div className="anislot-card__icon" aria-hidden="true">
                     <img src="/static/frontend/icons/anislot-gradient.svg" alt="" />
                 </div>
@@ -33,22 +109,326 @@ export default function AniSlot({ backUrl }: { backUrl: string }) {
                 <p className="anislot-card__description">
                     {product?.description || 'Configure your local InvokeAI workflow.'}
                 </p>
-                <label className="anislot-repository">
-                    <strong>GitHub Link</strong>
-                    <input
-                        className={repositoryUrl.trim() ? 'is-valid' : ''}
-                        type="url"
-                        value={repositoryUrl}
-                        onChange={event => setRepositoryUrl(event.target.value)}
-                        placeholder="https://github.com/owner/repository.git"
-                        required
-                    />
-                </label>
+                {!isCheckingSetup && (
+                    <label className="anislot-repository">
+                        <strong>GitHub Link</strong>
+                        <input
+                            className={repositoryUrl.trim() ? 'is-valid' : ''}
+                            type="url"
+                            value={repositoryUrl}
+                            onChange={event => onRepositoryChange(event.target.value)}
+                            placeholder="https://github.com/owner/repository.git"
+                            required
+                        />
+                    </label>
+                )}
                 {error && <p className="anislot-error" role="alert">{error}</p>}
-       
-                <button className="anislot-card__button" type="submit" disabled={!repositoryUrl.trim()}>Continue</button>
+                {setupStatus && <p className="anislot-setup-status" role="status">{setupStatus}</p>}
+                <button
+                    className="anislot-card__button"
+                    type="submit"
+                    disabled={isCheckingSetup || !repositoryUrl.trim() || isSubmitting}
+                >
+                    {isCheckingSetup ? 'Checking...' : isSubmitting ? 'Cloning...' : 'Continue'}
+                </button>
                 <a className="anislot-card__back" href={backUrl}>Back to products</a>
             </form>
         </main>
+    );
+}
+
+function Workspace({ backUrl }: { backUrl: string }) {
+    const imageInput = useRef<HTMLInputElement>(null);
+    const [snapshot] = useState<WorkspaceSnapshot>(workspacePlaceholder);
+    const [referenceImage, setReferenceImage] = useState<string>('');
+    const [referenceName, setReferenceName] = useState('');
+    const [isDragging, setIsDragging] = useState(false);
+    const [angleExplorer, setAngleExplorer] = useState(true);
+    const [characterPose, setCharacterPose] = useState(true);
+
+    useEffect(() => () => {
+        if (referenceImage.startsWith('blob:')) URL.revokeObjectURL(referenceImage);
+    }, [referenceImage]);
+
+    const useImage = (file?: File) => {
+        if (!file?.type.startsWith('image/')) return;
+        setReferenceImage(previous => {
+            if (previous.startsWith('blob:')) URL.revokeObjectURL(previous);
+            return URL.createObjectURL(file);
+        });
+        setReferenceName(file.name || 'Pasted image');
+    };
+
+    const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
+        useImage(event.target.files?.[0]);
+        event.target.value = '';
+    };
+
+    const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        setIsDragging(false);
+        useImage(event.dataTransfer.files?.[0]);
+    };
+
+    const handlePaste = (event: ClipboardEvent<HTMLElement>) => {
+        const image = Array.from(event.clipboardData.items)
+            .find(item => item.type.startsWith('image/'))
+            ?.getAsFile();
+        if (image) {
+            event.preventDefault();
+            useImage(image);
+        }
+    };
+
+    return (
+        <main className="workspace-page" onPaste={handlePaste}>
+            <aside className="workspace-rail">
+                <a className="workspace-brand" href={backUrl} aria-label="Back to products">
+                    <span className="workspace-brand__name" aria-hidden="true">
+                        <span>B</span><span>W</span>
+                    </span>
+                </a>
+                <span className="workspace-rail__glow" aria-hidden="true" />
+            </aside>
+
+            <div className="workspace-shell">
+                <section className="workspace-main" aria-label="Generation workspace">
+                    <div className="workflow-summary">
+                        <article className="summary-card" data-backend-field="job.status">
+                            <span>Status</span>
+                            <strong className="summary-card__status"><i />{snapshot.status}</strong>
+                        </article>
+                        <article className="summary-card" data-backend-field="job.currentNode">
+                            <span>Current node</span>
+                            <strong>{snapshot.currentNode}</strong>
+                        </article>
+                        <article className="summary-card" data-backend-field="job.estimatedTime">
+                            <span>Estimated time</span>
+                            <strong>{snapshot.estimatedTime}</strong>
+                        </article>
+                    </div>
+
+                    <section className="reference-panel">
+                        <header className="panel-heading">
+                            <span>Reference image</span>
+                            <i aria-hidden="true">›</i>
+                        </header>
+                        <div className="reference-panel__content">
+                            <div className="reference-input-wrap">
+                                <input
+                                    ref={imageInput}
+                                    className="visually-hidden"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileInput}
+                                    tabIndex={-1}
+                                />
+                                <button
+                                    className="reference-input"
+                                    data-dragging={isDragging}
+                                    type="button"
+                                    onClick={() => imageInput.current?.click()}
+                                    onDragEnter={() => setIsDragging(true)}
+                                    onDragLeave={() => setIsDragging(false)}
+                                    onDragOver={event => event.preventDefault()}
+                                    onDrop={handleDrop}
+                                    aria-label="Choose, drop, or paste a thematic reference image"
+                                >
+                                    {referenceImage ? (
+                                        <img src={referenceImage} alt={referenceName || 'Selected thematic reference'} />
+                                    ) : (
+                                        <>
+                                            <ReferenceArtwork />
+                                            <span className="reference-input__title">Add thematic image</span>
+                                            <span className="reference-input__hint">Click, drop, or paste</span>
+                                        </>
+                                    )}
+                                </button>
+                                {referenceImage && (
+                                    <button
+                                        className="reference-input__replace"
+                                        type="button"
+                                        onClick={() => imageInput.current?.click()}
+                                    >
+                                        Replace image
+                                    </button>
+                                )}
+                            </div>
+                            <label className="prompt-field prompt-field--additional">
+                                <span>Additional prompt</span>
+                                <textarea
+                                    data-backend-input="additionalPrompt"
+                                    placeholder="Add composition, style, lighting, or detail guidance..."
+                                />
+                            </label>
+                        </div>
+                    </section>
+
+                    <div className="prompt-grid">
+                        <label className="prompt-field prompt-field--large">
+                            <span>Positive prompt</span>
+                            <textarea
+                                data-backend-input="positivePrompt"
+                                placeholder="Describe what should appear in the result..."
+                            />
+                        </label>
+                        <label className="prompt-field prompt-field--large">
+                            <span>Negative prompt</span>
+                            <textarea
+                                data-backend-input="negativePrompt"
+                                placeholder="Describe what the result should avoid..."
+                            />
+                        </label>
+                    </div>
+                </section>
+
+                <aside className="workspace-sidebar" aria-label="System metrics and model configuration">
+                    <section className="metrics-grid" aria-label="System resource usage">
+                        {snapshot.resources.map(metric => <MetricDial key={metric.key} metric={metric} />)}
+                    </section>
+
+                    <section className="configuration-panel">
+                        <h1>Model configuration</h1>
+                        <label className="configuration-row">
+                            <SvgPlaceholder name="model-role" />
+                            <span className="configuration-row__copy">
+                                <strong>Model role</strong>
+                                <small>Select the model&apos;s behavior type</small>
+                            </span>
+                            <select defaultValue="detailer" data-backend-input="modelRole" aria-label="Model role">
+                                <option value="detailer">Detailer</option>
+                                <option value="composer">Composer</option>
+                                <option value="stylist">Stylist</option>
+                            </select>
+                        </label>
+                        <label className="configuration-row">
+                            <SvgPlaceholder name="image-scale-divider" />
+                            <span className="configuration-row__copy">
+                                <strong>Image scale divider</strong>
+                                <small>Select image downscaling ratio</small>
+                            </span>
+                            <select defaultValue="2" data-backend-input="scaleDivider" aria-label="Image scale divider">
+                                <option value="1">1x</option>
+                                <option value="2">2x</option>
+                                <option value="4">4x</option>
+                            </select>
+                        </label>
+                        <label className="configuration-row">
+                            <SvgPlaceholder name="angle-explorer" />
+                            <span className="configuration-row__copy">
+                                <strong>Angle explorer</strong>
+                                <small>Generate different angles</small>
+                            </span>
+                            <input
+                                className="toggle-input"
+                                type="checkbox"
+                                checked={angleExplorer}
+                                onChange={event => setAngleExplorer(event.target.checked)}
+                                data-backend-input="angleExplorer"
+                            />
+                            <span className="toggle" aria-hidden="true"><i /></span>
+                        </label>
+                        <label className="configuration-row">
+                            <SvgPlaceholder name="character-pose" />
+                            <span className="configuration-row__copy">
+                                <strong>Character pose</strong>
+                                <small>Generate different poses</small>
+                            </span>
+                            <input
+                                className="toggle-input"
+                                type="checkbox"
+                                checked={characterPose}
+                                onChange={event => setCharacterPose(event.target.checked)}
+                                data-backend-input="characterPose"
+                            />
+                            <span className="toggle" aria-hidden="true"><i /></span>
+                        </label>
+                        <label className="configuration-row">
+                            <SvgPlaceholder name="output-amount" />
+                            <span className="configuration-row__copy">
+                                <strong>Amount of output</strong>
+                                <small>Select number of generated images</small>
+                            </span>
+                            <select defaultValue="3" data-backend-input="outputAmount" aria-label="Amount of output">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                            </select>
+                        </label>
+                        <button className="generate-button" type="button" data-backend-action="generate">
+                            Generate
+                            <span aria-hidden="true">↗</span>
+                        </button>
+                    </section>
+                </aside>
+            </div>
+        </main>
+    );
+}
+
+export default function AniSlot({ backUrl }: { backUrl: string }) {
+    const [product, setProduct] = useState<ApiProduct | null>(null);
+    const [error, setError] = useState('');
+    const [repositoryUrl, setRepositoryUrl] = useState('');
+    const [setupStatus, setSetupStatus] = useState('');
+    const [repositoryReady, setRepositoryReady] = useState(false);
+    const [isCheckingSetup, setIsCheckingSetup] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        const previewWorkspace = import.meta.env.DEV
+            && new URLSearchParams(window.location.search).get('preview') === 'workspace';
+        if (previewWorkspace) {
+            setRepositoryReady(true);
+            setIsCheckingSetup(false);
+            return;
+        }
+
+        fetchProducts()
+            .then(async products => {
+                const anislot = products.find(item => item.name === 'AniSlot') || null;
+                setProduct(anislot);
+                if (!anislot) return;
+                const setup = await fetchSetupStatus(anislot.id);
+                setRepositoryReady(setup.configured);
+                if (setup.configured) setSetupStatus('GitHub repository is ready.');
+            })
+            .catch((requestError: Error) => setError(requestError.message))
+            .finally(() => setIsCheckingSetup(false));
+    }, []);
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!product || !repositoryUrl.trim()) return;
+
+        setIsSubmitting(true);
+        setSetupStatus('Cloning repository...');
+
+        try {
+            const result = await startSetup(product.id, repositoryUrl.trim());
+            setSetupStatus(`Repository is ready: ${result.localPath}`);
+            setRepositoryReady(true);
+        } catch (requestError) {
+            setSetupStatus(requestError instanceof Error ? requestError.message : 'Setup failed.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (repositoryReady) return <Workspace backUrl={backUrl} />;
+
+    return (
+        <SetupCard
+            backUrl={backUrl}
+            product={product}
+            error={error}
+            repositoryUrl={repositoryUrl}
+            setupStatus={setupStatus}
+            isCheckingSetup={isCheckingSetup}
+            isSubmitting={isSubmitting}
+            onRepositoryChange={setRepositoryUrl}
+            onSubmit={handleSubmit}
+        />
     );
 }
