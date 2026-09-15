@@ -222,7 +222,7 @@
 .workspace-shell--dashboard {
     grid-template-columns: minmax(640px, 1fr) minmax(390px, 505px);
     grid-template-areas:
-        "metrics metrics"
+        "metrics configuration"
         "status configuration"
         "output configuration";
     align-items: start;
@@ -233,8 +233,9 @@
     grid-area: metrics;
     display: flex;
     flex-wrap: nowrap;
-    justify-content: end;
-    gap: 14px;
+    justify-content: space-between;
+    width: 100%;
+    gap: 18px;
     overflow-x: auto;
     scrollbar-width: thin;
 }
