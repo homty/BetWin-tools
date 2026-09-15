@@ -6,7 +6,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .clone_service import clone_repository, existing_repository_matches, repository_destination
 from .invoke_client import InvokeClient, InvokeError
-from .models import CodeSubmission, Product, SetupJob
+from .models import CodeSubmission, Product
 from .pipeline_client import ModelPipelineClient, PipelineError
 from .workflow_builder import AniSlotWorkflowBuilder, WorkflowBuildError
 
@@ -35,24 +35,26 @@ def pipeline(request):
 
 @require_POST
 def anislot_generate(request):
+    """Upload one source image and queue the AniSlot InvokeAI workflow."""
     image = request.FILES.get('image')
     if image is None:
-        return JsonResponse({'error': 'A reference image is required.'}, status=400)
+        return JsonResponse({'error': 'An image file is required.'}, status=400)
 
     try:
         seed = _optional_integer(request.POST.get('seed'), 'seed')
         width = _optional_integer(request.POST.get('width'), 'width')
-        runs = _optional_integer(request.POST.get('runs'), 'runs') or 1
         if seed is not None and seed < 0:
             raise ValueError('seed must be a non-negative integer.')
         if width is not None and width < 64:
             raise ValueError('width must be an integer of at least 64.')
-        if not 1 <= runs <= 4:
-            raise ValueError('runs must be between 1 and 4.')
 
         client = InvokeClient()
-        uploaded = client.upload_image(image.read(), image.name, image.content_type)
-        image_name = uploaded.get('image_name')
+        uploaded_image = client.upload_image(
+            image.read(),
+            image.name,
+            image.content_type,
+        )
+        image_name = uploaded_image.get('image_name')
         if not isinstance(image_name, str) or not image_name:
             raise InvokeError('InvokeAI uploaded the image but did not return image_name.')
 
@@ -63,18 +65,22 @@ def anislot_generate(request):
             seed=seed,
             width=width,
         )
-        queued = client.enqueue_graph(graph, runs=runs)
-        item_ids = queued['item_ids']
+        queued = client.enqueue_graph(graph)
+        item_id = queued['item_ids'][0]
     except (InvokeError, WorkflowBuildError) as error:
         return JsonResponse({'error': str(error)}, status=error.status_code)
     except ValueError as error:
         return JsonResponse({'error': str(error)}, status=400)
 
-    return JsonResponse({'status': 'queued', 'itemId': item_ids[0], 'itemIds': item_ids}, status=202)
+    return JsonResponse({
+        'status': 'queued',
+        'itemId': item_id,
+    }, status=202)
 
 
 @require_GET
 def anislot_job(request, item_id):
+    """Return a normalized status for one InvokeAI queue item."""
     try:
         item = InvokeClient().queue_item(item_id)
     except InvokeError as error:
@@ -83,6 +89,7 @@ def anislot_job(request, item_id):
     status = item.get('status')
     if not isinstance(status, str):
         return JsonResponse({'error': 'InvokeAI returned a job without a status.'}, status=502)
+
     response = {'itemId': item_id, 'status': status}
     if status in {'failed', 'canceled'}:
         response['error'] = item.get('error_message') or f'InvokeAI job {status}.'
@@ -96,11 +103,13 @@ def anislot_job(request, item_id):
             response['imageUrl'] = reverse('api_gateway:anislot_image', args=[image_name])
         else:
             response['error'] = 'InvokeAI completed the job but returned no image output.'
+
     return JsonResponse(response)
 
 
 @require_GET
 def anislot_image(request, image_name):
+    """Proxy a generated InvokeAI image through Django for the frontend."""
     try:
         content, content_type = InvokeClient().download_image(image_name)
     except InvokeError as error:
@@ -109,7 +118,10 @@ def anislot_image(request, image_name):
 
 
 def _optional_text(value):
-    return value.strip() or None if value is not None else None
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
 
 
 def _optional_integer(value, field_name):
@@ -157,23 +169,24 @@ def setup(request):
     except Product.DoesNotExist:
         return JsonResponse({'error': 'Product not found.'}, status=404)
 
-    job = SetupJob.objects.create(
-        product=product,
-        repository_url=repository_url.strip(),
-    )
+    repository_url = repository_url.strip()
 
     try:
-        path = clone_repository(job.repository_url, product.name)
+        clone_repository(repository_url, product.name)
     except (ValueError, FileExistsError, RuntimeError) as error:
-        job.status = 'failed'
-        job.error_message = str(error)
-        job.save(update_fields=['status', 'error_message'])
-        return JsonResponse({'id': job.id, 'status': job.status, 'error': job.error_message}, status=400)
+        return JsonResponse({
+            'status': 'failed',
+            'error': str(error),
+        }, status=400)
 
-    job.status = 'ready'
-    job.local_path = str(path)
-    job.save(update_fields=['status', 'local_path'])
-    return JsonResponse({'id': job.id, 'status': job.status, 'localPath': job.local_path}, status=201)
+    if product.github_url != repository_url:
+        product.github_url = repository_url
+        product.save(update_fields=['github_url'])
+
+    return JsonResponse({
+        'status': 'ready',
+        'githubUrl': product.github_url,
+    }, status=201)
 
 
 @require_GET
@@ -188,26 +201,12 @@ def setup_status(request):
     except Product.DoesNotExist:
         return JsonResponse({'error': 'Product not found.'}, status=404)
 
-    job = product.setup_jobs.filter(status='ready').first()
-    if job:
-        return JsonResponse({
-            'configured': True,
-            'status': job.status,
-            'localPath': job.local_path,
-        })
-
     destination = repository_destination(product.name)
     if product.github_url and existing_repository_matches(destination, product.github_url):
-        job = SetupJob.objects.create(
-            product=product,
-            repository_url=product.github_url,
-            local_path=str(destination),
-            status='ready',
-        )
         return JsonResponse({
             'configured': True,
-            'status': job.status,
-            'localPath': job.local_path,
+            'status': 'ready',
+            'githubUrl': product.github_url,
         })
 
     return JsonResponse({'configured': False, 'status': 'not_configured'})

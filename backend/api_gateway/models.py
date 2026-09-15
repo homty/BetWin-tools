@@ -4,7 +4,7 @@ from django.db import models
 class Product(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    github_url = models.URLField(blank=True)
+    github_url = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

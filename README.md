@@ -28,6 +28,55 @@ cd D:\GitHub\BetWin-tools\backend
 
 Open http://127.0.0.1:8000/.
 
+## Friend workstation setup (Windows)
+
+After cloning this repository, run PowerShell from the repository root:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\setup-friend.ps1
+```
+
+The script checks the required tools, creates or reuses
+`%USERPROFILE%\.ssh\anislot_deploy`, verifies access to the private AniSlot
+workflow repository, installs backend and frontend dependencies, builds the
+frontend, and applies database migrations. If the public key has not been added
+to the workflow repository yet, the script displays it and pauses while the
+repository owner adds it as a read-only GitHub Deploy Key.
+
+To also download the official InvokeAI Launcher and prepare AniSlot's custom
+nodes and workflow after the Launcher installation, use:
+
+```powershell
+.\setup-friend.ps1 -DownloadInvoke
+```
+
+The InvokeAI Launcher completes its first installation interactively. It lets
+the friend choose where InvokeAI is stored. Afterwards, install or refresh the
+AniSlot files with:
+
+```powershell
+.\setup-invoke.ps1
+```
+
+The script asks for the selected InvokeAI folder. You may instead provide it
+without an interactive prompt, for example:
+
+```powershell
+.\setup-invoke.ps1 -InvokeRoot 'D:\Invoke-AI'
+```
+
+This copies the custom node pack into `nodes\designer_logic` and stages the
+workflow in `workflow_imports\AniSlot-Workflow.json`. Restart InvokeAI, import
+the workflow in its Workflow Editor, and download its required models through
+the InvokeAI model manager before sending a job from BetWin.
+
+To start Django immediately after setup:
+
+```powershell
+.\setup-friend.ps1 -StartServer
+```
+
 ## Development
 
 Frontend-only dev server:

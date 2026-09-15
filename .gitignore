@@ -27,3 +27,4 @@ frontend/.vite/
 frontend/dist/
 frontend/coverage/
 backend/static/frontend/
+workspaces/

@@ -9,13 +9,6 @@ import '../pages/anislot/anislot.css';
 
 const root = document.getElementById('welcome-root');
 if (root) {
-    const isWorkspacePreview = import.meta.env.DEV
-        && new URLSearchParams(window.location.search).get('page') === 'anislot';
-    if (isWorkspacePreview) {
-        createRoot(root).render(
-            <StrictMode><AniSlot backUrl="/" /></StrictMode>,
-        );
-    } else {
     // Render with real font metrics, but remain usable when a font fails.
     const mount = () => createRoot(root).render(
         <StrictMode><Welcome dashboardUrl={root.dataset.dashboardUrl || '/dashboard/'} /></StrictMode>,
@@ -24,7 +17,6 @@ if (root) {
         Promise.all([document.fonts.load('700 80px "Montserrat Variable"'), document.fonts.load('italic 500 45px "Montserrat Variable"')]),
         new Promise(resolve => setTimeout(resolve, 2000)),
     ]).then(mount, mount);
-    }
 }
 
 const onboardRoot = document.getElementById('onboard-root');
@@ -43,6 +35,11 @@ if (onboardRoot) {
 const anislotRoot = document.getElementById('anislot-root');
 if (anislotRoot) {
     createRoot(anislotRoot).render(
-        <StrictMode><AniSlot backUrl={anislotRoot.dataset.backUrl || '/'} /></StrictMode>,
+        <StrictMode>
+            <AniSlot
+                backUrl={anislotRoot.dataset.backUrl || '/'}
+                coreUrl={anislotRoot.dataset.coreUrl || '/anislot/core/'}
+            />
+        </StrictMode>,
     );
 }
