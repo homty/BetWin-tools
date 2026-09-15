@@ -220,17 +220,34 @@
 .workflow-actions { display: grid; gap: 8px; }
 
 .workspace-shell--dashboard {
-    grid-template-columns: minmax(640px, 1fr) minmax(420px, 505px);
-    grid-template-areas:
-        "metrics configuration"
-        "status configuration"
-        "output roles";
+    width: min(calc(100% - 130px), 1630px);
+    max-width: 1630px;
+    margin-left: 130px;
+    padding: 30px 50px;
+    grid-template-columns: minmax(640px, 980px) minmax(420px, 505px);
+    justify-content: start;
     align-items: start;
 }
 
-.dashboard-status { grid-area: status; }
+.workspace-page--dashboard .workspace-rail { width: 130px; }
+.workspace-page--dashboard .workspace-brand { left: 24px; }
+.workspace-page--dashboard .workspace-nav { right: 12px; left: 12px; }
+.workspace-page--dashboard .workspace-nav__link { grid-template-columns: 1fr; justify-items: center; padding-inline: 6px; }
+.workspace-page--dashboard .workspace-nav__link > span:last-child { display: none; }
+
+.dashboard-main-column,
+.dashboard-side-column {
+    display: grid;
+    align-content: start;
+    gap: 24px;
+}
+
+.dashboard-overview {
+    display: grid;
+    gap: 36px;
+}
+
 .metrics-grid.dashboard-metrics {
-    grid-area: metrics;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     width: 100%;
@@ -239,11 +256,10 @@
 }
 .metrics-grid.dashboard-metrics .metric-dial {
     width: min(100%, 225px);
+    max-width: 225px;
     justify-self: center;
 }
-.dashboard-output { grid-area: output; }
-.dashboard-configuration { grid-area: configuration; min-height: 510px; }
-.model-roles-panel { grid-area: roles; }
+.dashboard-configuration { min-height: 510px; }
 
 .dashboard-output {
     min-height: 628px;
@@ -610,12 +626,6 @@
     .workspace-shell--workflow { grid-template-columns: 1fr; }
     .workspace-shell--dashboard {
         grid-template-columns: 1fr;
-        grid-template-areas:
-            "metrics"
-            "status"
-            "output"
-            "configuration"
-            "roles";
     }
     .metrics-grid.dashboard-metrics {
         grid-template-columns: repeat(4, minmax(120px, 1fr));

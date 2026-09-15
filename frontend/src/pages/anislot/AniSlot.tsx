@@ -145,33 +145,38 @@ function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
     }, [job?.itemId]);
 
     return (
-        <main className="workspace-page">
+        <main className="workspace-page workspace-page--dashboard">
             <aside className="workspace-rail">
                 <a className="workspace-brand" href={backUrl} aria-label="Back to products"><span className="workspace-brand__name" aria-hidden="true"><span>B</span><span>W</span></span></a>
                 <WorkspaceNav dashboardUrl={dashboardUrl} workflowUrl={workflowUrl} active="dashboard" />
                 <span className="workspace-rail__glow" aria-hidden="true" />
             </aside>
             <div className="workspace-shell workspace-shell--dashboard">
-                <section className="workflow-summary dashboard-status" aria-label="Workflow status">
-                    <article className="summary-card"><span>Status</span><strong className="summary-card__status"><i />{snapshot.status}</strong></article>
-                    <article className="summary-card"><span>Current node</span><strong>{snapshot.currentNode}</strong></article>
-                    <article className="summary-card"><span>Estimated time</span><strong>{snapshot.estimatedTime}</strong></article>
-                </section>
-                <section className="metrics-grid dashboard-metrics" aria-label="System resource usage">{snapshot.resources.map(metric => <MetricDial key={metric.key} metric={metric} />)}</section>
-                <section className="dashboard-output">
-                    <header className="panel-heading"><span>Gallery</span></header>
-                    {job?.imageUrl ? <img src={job.imageUrl} alt="Final generated slot concept" /> : <span><strong>Final Generation will appear here</strong><small>Start a workflow to track its progress and view the saved result.</small></span>}
-                    {job?.error && <p className="workspace-error" role="alert">{job.error}</p>}
-                </section>
-                <aside className="configuration-panel dashboard-configuration" aria-label="Model configuration">
+                <div className="dashboard-main-column">
+                    <div className="dashboard-overview">
+                        <section className="metrics-grid dashboard-metrics" aria-label="System resource usage">{snapshot.resources.map(metric => <MetricDial key={metric.key} metric={metric} />)}</section>
+                        <section className="workflow-summary dashboard-status" aria-label="Workflow status">
+                            <article className="summary-card"><span>Status</span><strong className="summary-card__status"><i />{snapshot.status}</strong></article>
+                            <article className="summary-card"><span>Current node</span><strong>{snapshot.currentNode}</strong></article>
+                            <article className="summary-card"><span>Estimated time</span><strong>{snapshot.estimatedTime}</strong></article>
+                        </section>
+                    </div>
+                    <section className="dashboard-output">
+                        <header className="panel-heading"><span>Gallery</span></header>
+                        {job?.imageUrl ? <img src={job.imageUrl} alt="Final generated slot concept" /> : <span><strong>Final Generation will appear here</strong><small>Start a workflow to track its progress and view the saved result.</small></span>}
+                        {job?.error && <p className="workspace-error" role="alert">{job.error}</p>}
+                    </section>
+                </div>
+                <div className="dashboard-side-column">
+                    <aside className="configuration-panel dashboard-configuration" aria-label="Model configuration">
                         <h1>Model configuration</h1>
                         <label className="configuration-row"><SvgPlaceholder name="model-role" /><span className="configuration-row__copy"><strong>Model role</strong><small>Select the model&apos;s behavior type</small></span><select value={modelRole} onChange={event => setModelRole(event.target.value as 'finisher' | 'creative')}><option value="finisher">Finisher</option><option value="creative">Creative</option></select></label>
                         <label className="configuration-row"><SvgPlaceholder name="image-scale-divider" /><span className="configuration-row__copy"><strong>Image scale divider</strong><small>Select image downscaling ratio</small></span><select defaultValue="2"><option value="1">1x</option><option value="2">2x</option><option value="4">4x</option></select></label>
                         <label className="configuration-row"><SvgPlaceholder name="angle-explorer" /><span className="configuration-row__copy"><strong>Angle explorer</strong><small>Generate different angles</small></span><input className="toggle-input" type="checkbox" checked={angleExplorer} onChange={event => setAngleExplorer(event.target.checked)} /><span className="toggle" aria-hidden="true"><i /></span></label>
                         <label className="configuration-row"><SvgPlaceholder name="character-pose" /><span className="configuration-row__copy"><strong>Character pose</strong><small>Generate different poses</small></span><input className="toggle-input" type="checkbox" checked={characterPose} onChange={event => setCharacterPose(event.target.checked)} /><span className="toggle" aria-hidden="true"><i /></span></label>
                         <label className="configuration-row"><SvgPlaceholder name="output-amount" /><span className="configuration-row__copy"><strong>Amount of output</strong><small>Select number of generated images</small></span><select value={outputAmount} onChange={event => setOutputAmount(Number(event.target.value))}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
-                </aside>
-                <section className="model-roles-panel" aria-label="Model roles">
+                    </aside>
+                    <section className="model-roles-panel" aria-label="Model roles">
                     <h2>Model role</h2>
                     <button className="model-role-card" type="button" onClick={() => setModelRole('finisher')} data-active={modelRole === 'finisher'}>
                         <SvgPlaceholder name="finisher-role" />
@@ -186,7 +191,8 @@ function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
                     <button className="model-role-add" type="button" aria-label="Add model role">
                         <img src="/static/frontend/icons/add.svg" alt="" />
                     </button>
-                </section>
+                    </section>
+                </div>
             </div>
         </main>
     );
