@@ -681,3 +681,70 @@
     .toggle i,
     .generate-button { transition: none; }
 }
+
+/*
+ * Dashboard is designed on a 1760px-wide canvas. Scaling the complete canvas
+ * keeps the same proportions on large displays and also compensates for
+ * browser zoom instead of leaving a fixed-size dashboard in the top-left.
+ */
+.workspace-page--dashboard {
+    width: 1760px;
+    min-height: 1117px;
+    zoom: var(--dashboard-scale, 1);
+}
+
+.workspace-page--dashboard .workspace-rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 130px;
+    height: 1117px;
+    border-right: 1px solid rgba(182, 255, 0, .08);
+    border-bottom: 0;
+}
+
+.workspace-page--dashboard .workspace-brand { top: 28px; left: 24px; }
+.workspace-page--dashboard .workspace-brand__name { font-size: 43px; }
+.workspace-page--dashboard .workspace-nav {
+    top: 112px;
+    right: 12px;
+    left: 12px;
+    grid-template-columns: 1fr;
+}
+.workspace-page--dashboard .workspace-rail__glow {
+    inset: 0 -10px 0 auto;
+    width: 26px;
+    height: auto;
+}
+
+.workspace-page--dashboard .workspace-shell--dashboard {
+    width: 1630px;
+    min-height: 1117px;
+    margin-left: 130px;
+    padding: 30px 50px;
+    grid-template-columns: 980px 505px;
+    gap: 24px;
+}
+
+.workspace-page--dashboard .dashboard-main-column,
+.workspace-page--dashboard .dashboard-side-column { gap: 24px; }
+.workspace-page--dashboard .dashboard-overview { gap: 36px; }
+.workspace-page--dashboard .metrics-grid.dashboard-metrics {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    overflow: visible;
+}
+.workspace-page--dashboard .metrics-grid.dashboard-metrics .metric-dial { width: 225px; max-width: none; }
+.workspace-page--dashboard .workflow-summary { grid-template-columns: repeat(3, 1fr); gap: 40px; }
+.workspace-page--dashboard .summary-card { min-height: 122px; gap: 20px; }
+.workspace-page--dashboard .summary-card > span { font-size: 26px; }
+.workspace-page--dashboard .summary-card > strong { font-size: 14px; }
+.workspace-page--dashboard .metric-dial__inner strong { font-size: 24px; }
+.workspace-page--dashboard .metric-dial__inner span { font-size: 16px; }
+.workspace-page--dashboard .panel-heading { font-size: 27px; }
+.workspace-page--dashboard .configuration-panel h1,
+.workspace-page--dashboard .model-roles-panel h2 { font-size: 28px; }
+.workspace-page--dashboard .configuration-row { grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; }
+.workspace-page--dashboard .workspace-svg-placeholder { width: 52px; height: 52px; }
+.workspace-page--dashboard .workspace-svg-placeholder__head { top: 10px; left: 18px; width: 16px; height: 16px; }
+.workspace-page--dashboard .workspace-svg-placeholder__body { left: 11px; bottom: 8px; width: 30px; }
+.workspace-page--dashboard .configuration-row__copy small { display: block; }

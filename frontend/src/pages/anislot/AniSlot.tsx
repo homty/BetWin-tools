@@ -102,6 +102,7 @@ function WorkspaceNav({
 function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; dashboardUrl: string; workflowUrl: string }) {
     const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(workspacePlaceholder);
     const [job, setJob] = useState<AniSlotJob | null>(null);
+    const [dashboardScale, setDashboardScale] = useState(() => window.innerWidth / 1760);
     const [modelRole, setModelRole] = useState<'finisher' | 'creative'>(() => localStorage.getItem('anislot.modelRole') === 'creative' ? 'creative' : 'finisher');
     const [outputAmount, setOutputAmount] = useState(() => Number(localStorage.getItem('anislot.outputAmount') || '3'));
     const [angleExplorer, setAngleExplorer] = useState(() => localStorage.getItem('anislot.angleExplorer') !== 'false');
@@ -116,6 +117,13 @@ function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
     useEffect(() => { localStorage.setItem('anislot.outputAmount', String(outputAmount)); }, [outputAmount]);
     useEffect(() => { localStorage.setItem('anislot.angleExplorer', String(angleExplorer)); }, [angleExplorer]);
     useEffect(() => { localStorage.setItem('anislot.characterPose', String(characterPose)); }, [characterPose]);
+
+    useEffect(() => {
+        const updateScale = () => setDashboardScale(window.innerWidth / 1760);
+        updateScale();
+        window.addEventListener('resize', updateScale);
+        return () => window.removeEventListener('resize', updateScale);
+    }, []);
 
     useEffect(() => {
         if (!job || ['completed', 'failed', 'canceled'].includes(job.status)) return;
@@ -145,7 +153,10 @@ function Dashboard({ backUrl, dashboardUrl, workflowUrl }: { backUrl: string; da
     }, [job?.itemId]);
 
     return (
-        <main className="workspace-page workspace-page--dashboard">
+        <main
+            className="workspace-page workspace-page--dashboard"
+            style={{ '--dashboard-scale': dashboardScale } as CSSProperties}
+        >
             <aside className="workspace-rail">
                 <a className="workspace-brand" href={backUrl} aria-label="Back to products"><span className="workspace-brand__name" aria-hidden="true"><span>B</span><span>W</span></span></a>
                 <WorkspaceNav dashboardUrl={dashboardUrl} workflowUrl={workflowUrl} active="dashboard" />
